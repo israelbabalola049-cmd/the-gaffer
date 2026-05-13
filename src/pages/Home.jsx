@@ -21,6 +21,17 @@ const LEAGUE_COUNTRY = {
   'Super Lig':        { name: 'Turkey',      flag: '🇹🇷' },
 };
 
+const LEAGUE_LOGO = {
+  'Premier League':   'https://upload.wikimedia.org/wikipedia/en/f/f2/Premier_League_Logo.svg',
+  'La Liga':          'https://upload.wikimedia.org/wikipedia/commons/5/54/LaLiga_EA_Sports_logo_%28Vertical%29.svg',
+  'Bundesliga':       'https://upload.wikimedia.org/wikipedia/en/d/df/Bundesliga_logo_%282017%29.svg',
+  'Serie A':          'https://upload.wikimedia.org/wikipedia/en/e/e1/Serie_A_logo_%282019%29.svg',
+  'Ligue 1':          'https://upload.wikimedia.org/wikipedia/commons/e/e7/Ligue_1_McDonald%27s_logo.svg',
+  'Champions League': 'https://upload.wikimedia.org/wikipedia/en/b/bf/UEFA_Champions_League_logo_2.svg',
+  'Eredivisie':       'https://upload.wikimedia.org/wikipedia/commons/0/09/Eredivisie_nieuw_logo_2017-.svg',
+  'Super Lig':        'https://upload.wikimedia.org/wikipedia/commons/f/f4/S%C3%BCper_Lig_logo.svg',
+};
+
 const fmt = (n) => {
   if (!n) return '—';
   if (n >= 1e9) return `£${(n / 1e9).toFixed(1)}B`;
@@ -57,9 +68,9 @@ function Stars({ count }) {
         const full = i <= Math.floor(count);
         const half = !full && i === Math.ceil(count) && count % 1 !== 0;
         return (
-          <svg key={i} width="20" height="20" viewBox="0 0 24 24">
+          <svg key={i} width="22" height="22" viewBox="0 0 24 24">
             {full ? (
-              <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26" fill="#f5c518" />
+              <polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26" fill="#f5c518"/>
             ) : half ? (
               <>
                 <defs><linearGradient id={`h${i}`}><stop offset="50%" stopColor="#f5c518"/><stop offset="50%" stopColor="rgba(255,255,255,0.1)"/></linearGradient></defs>
@@ -72,6 +83,74 @@ function Stars({ count }) {
         );
       })}
     </div>
+  );
+}
+
+/* ─── Club Badge Fallback SVG ─── */
+function ClubBadgeFallback({ club, size = 110 }) {
+  const color = club?.color || '#888';
+  const name = club?.name || '';
+  // Pick a shape style based on club id or name hash so each club looks different
+  const hash = name.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
+  const style = hash % 5; // 0–4 shield styles
+
+  const half = size / 2;
+  const s = size;
+
+  // Shield paths scaled to `size`
+  const shields = [
+    // 0: Classic pointed bottom shield
+    `M ${half} ${s * 0.06} L ${s * 0.92} ${s * 0.22} L ${s * 0.92} ${s * 0.58} Q ${s * 0.92} ${s * 0.82} ${half} ${s * 0.96} Q ${s * 0.08} ${s * 0.82} ${s * 0.08} ${s * 0.58} L ${s * 0.08} ${s * 0.22} Z`,
+    // 1: Rounded top shield
+    `M ${s * 0.1} ${s * 0.28} Q ${s * 0.1} ${s * 0.08} ${half} ${s * 0.06} Q ${s * 0.9} ${s * 0.08} ${s * 0.9} ${s * 0.28} L ${s * 0.9} ${s * 0.62} Q ${s * 0.9} ${s * 0.84} ${half} ${s * 0.96} Q ${s * 0.1} ${s * 0.84} ${s * 0.1} ${s * 0.62} Z`,
+    // 2: Flat top shield
+    `M ${s * 0.1} ${s * 0.1} L ${s * 0.9} ${s * 0.1} L ${s * 0.9} ${s * 0.65} Q ${s * 0.9} ${s * 0.84} ${half} ${s * 0.96} Q ${s * 0.1} ${s * 0.84} ${s * 0.1} ${s * 0.65} Z`,
+    // 3: Badge hexagon-ish
+    `M ${half} ${s * 0.04} L ${s * 0.9} ${s * 0.26} L ${s * 0.9} ${s * 0.68} L ${half} ${s * 0.96} L ${s * 0.1} ${s * 0.68} L ${s * 0.1} ${s * 0.26} Z`,
+    // 4: Crest with notch top
+    `M ${s * 0.1} ${s * 0.18} L ${s * 0.35} ${s * 0.06} L ${half} ${s * 0.14} L ${s * 0.65} ${s * 0.06} L ${s * 0.9} ${s * 0.18} L ${s * 0.9} ${s * 0.62} Q ${s * 0.9} ${s * 0.84} ${half} ${s * 0.96} Q ${s * 0.1} ${s * 0.84} ${s * 0.1} ${s * 0.62} Z`,
+  ];
+
+  const abbr = name.split(' ').map(w => w[0]).join('').slice(0, 3).toUpperCase();
+
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${s} ${s}`} xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id={`fbg-${abbr}`} x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor={color} stopOpacity="0.35"/>
+          <stop offset="100%" stopColor={color} stopOpacity="0.12"/>
+        </linearGradient>
+      </defs>
+      {/* Shield fill */}
+      <path d={shields[style]} fill={`url(#fbg-${abbr})`} stroke={color} strokeWidth={s * 0.025} strokeLinejoin="round"/>
+      {/* Inner border */}
+      <path d={shields[style]} fill="none" stroke={color} strokeWidth={s * 0.012} strokeLinejoin="round" opacity="0.3"
+        transform={`scale(0.82) translate(${s * 0.1} ${s * 0.1})`}/>
+      {/* Club abbreviation */}
+      <text
+        x={half} y={half + s * 0.06}
+        textAnchor="middle"
+        fontFamily="'Barlow Condensed', sans-serif"
+        fontWeight="900"
+        fontSize={s * 0.22}
+        fill={color}
+        letterSpacing={s * 0.01}
+      >{abbr}</text>
+    </svg>
+  );
+}
+
+/* ─── Badge image with SVG fallback on error ─── */
+function BadgeImg({ club, size = 110 }) {
+  const [failed, setFailed] = useState(false);
+  if (!club?.badgeUrl || failed) return <ClubBadgeFallback club={club} size={size} />;
+  return (
+    <img
+      src={club.badgeUrl}
+      alt={club.name}
+      style={{ width: size, height: size, objectFit: 'contain' }}
+      onError={() => setFailed(true)}
+    />
   );
 }
 
@@ -97,19 +176,111 @@ function ArrowBtn({ dir, onClick }) {
   );
 }
 
-/* ─── Kit Shirt ─── */
+/* ─── Kit Shirt — clean accurate football shirt ─── */
 function KitShirt({ color, accent, label }) {
-  const c = color || '#333';
-  const a = accent || '#fff';
+  const c = color || '#1a1a2e';
+  const a = accent || '#ffffff';
+  const id = `sh-${label}`;
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-      <svg width="72" height="72" viewBox="0 0 100 100">
-        <path d="M30 20 L10 40 L25 45 L25 85 L75 85 L75 45 L90 40 L70 20 L60 28 Q50 34 40 28 Z" fill={c} stroke="rgba(255,255,255,0.15)" strokeWidth="1.5"/>
-        <path d="M40 28 Q50 38 60 28" fill="none" stroke={a} strokeWidth="2"/>
-        <line x1="10" y1="40" x2="25" y2="45" stroke={a} strokeWidth="1" opacity="0.4"/>
-        <line x1="90" y1="40" x2="75" y2="45" stroke={a} strokeWidth="1" opacity="0.4"/>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+      <svg width="96" height="100" viewBox="0 0 200 210" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <filter id={id} x="-20%" y="-20%" width="140%" height="140%">
+            <feDropShadow dx="0" dy="6" stdDeviation="8" floodColor="#000" floodOpacity="0.45"/>
+          </filter>
+          {/* Subtle fabric sheen gradient */}
+          <linearGradient id={`g-${id}`} x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#fff" stopOpacity="0.1"/>
+            <stop offset="50%" stopColor="#fff" stopOpacity="0.03"/>
+            <stop offset="100%" stopColor="#000" stopOpacity="0.08"/>
+          </linearGradient>
+        </defs>
+
+        {/*
+          Shirt outline:
+          - Collar notch at top center
+          - Shoulder seams drop outward to sleeve ends
+          - Sleeves angle down then cut flat at cuff
+          - Body tapers slightly at waist, flares to hem
+        */}
+        <path
+          d="
+            M 72 18
+            C 72 18  80 8  100 8
+            C 120 8  128 18  128 18
+            L 158 10
+            L 192 52
+            L 162 66
+            L 158 190
+            L 42 190
+            L 38 66
+            L 8 52
+            L 42 10
+            Z
+          "
+          fill={c}
+          stroke="rgba(255,255,255,0.12)"
+          strokeWidth="1.5"
+          strokeLinejoin="round"
+          filter={`url(#${id})`}
+        />
+
+        {/* Sheen overlay */}
+        <path
+          d="
+            M 72 18
+            C 72 18  80 8  100 8
+            C 120 8  128 18  128 18
+            L 158 10
+            L 192 52
+            L 162 66
+            L 158 190
+            L 42 190
+            L 38 66
+            L 8 52
+            L 42 10
+            Z
+          "
+          fill={`url(#g-${id})`}
+        />
+
+        {/* V-collar */}
+        <path
+          d="M 82 20 L 100 44 L 118 20"
+          fill="none"
+          stroke={a}
+          strokeWidth="3"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          opacity="0.9"
+        />
+
+        {/* Left shoulder seam line */}
+        <line x1="72" y1="18" x2="42" y2="10" stroke={a} strokeWidth="1.5" opacity="0.2"/>
+        {/* Right shoulder seam line */}
+        <line x1="128" y1="18" x2="158" y2="10" stroke={a} strokeWidth="1.5" opacity="0.2"/>
+
+        {/* Left sleeve cuff band */}
+        <path d="M 10 48 L 38 62" stroke={a} strokeWidth="4" strokeLinecap="round" opacity="0.35"/>
+        {/* Right sleeve cuff band */}
+        <path d="M 190 48 L 162 62" stroke={a} strokeWidth="4" strokeLinecap="round" opacity="0.35"/>
+
+        {/* Hem band */}
+        <path d="M 42 184 L 158 184" stroke={a} strokeWidth="3" strokeLinecap="round" opacity="0.2"/>
+
+        {/* Side seam subtle line */}
+        <line x1="42" y1="66" x2="42" y2="184" stroke={a} strokeWidth="1" opacity="0.08"/>
+        <line x1="158" y1="66" x2="158" y2="184" stroke={a} strokeWidth="1" opacity="0.08"/>
       </svg>
-      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase', letterSpacing: 1 }}>{label}</span>
+
+      <span style={{
+        fontFamily: 'var(--font-mono)', fontSize: 10,
+        color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: 2,
+        background: 'rgba(255,255,255,0.05)',
+        border: '1px solid rgba(255,255,255,0.1)',
+        borderRadius: 4, padding: '3px 10px',
+      }}>{label}</span>
     </div>
   );
 }
@@ -137,23 +308,30 @@ function ClubDetailModal({ club, allPlayers, onConfirm, onBack }) {
   return (
     <div style={{
       position: 'fixed', inset: 0, zIndex: 600,
-      background: 'rgba(4,6,10,0.98)',
-      backdropFilter: 'blur(24px)',
+      background: 'rgba(4,6,10,0.97)',
       overflowY: 'auto',
       animation: 'detailIn 0.3s ease',
     }}>
       <style>{`@keyframes detailIn { from { opacity:0; transform:translateY(20px) } to { opacity:1; transform:translateY(0) } }`}</style>
 
-      {/* Badge watermark bg */}
+      {/* Sticky badge watermark — fixed so it doesn't scroll away */}
       {club.badgeUrl && (
         <div style={{
-          position: 'fixed', inset: 0, zIndex: 0,
+          position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none',
           backgroundImage: `url(${club.badgeUrl})`,
-          backgroundSize: '55%', backgroundPosition: 'center',
-          backgroundRepeat: 'no-repeat', opacity: 0.04, pointerEvents: 'none',
+          backgroundSize: '52%',
+          backgroundPosition: 'center center',
+          backgroundRepeat: 'no-repeat',
+          opacity: 0.05,
         }}/>
       )}
+      {/* Color glow — also fixed */}
+      <div style={{
+        position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'none',
+        background: `radial-gradient(ellipse at 50% 40%, ${color}0e 0%, transparent 60%)`,
+      }}/>
 
+      {/* Scrollable content sits above fixed bg */}
       <div style={{ position: 'relative', zIndex: 1, maxWidth: 640, margin: '0 auto', padding: 'clamp(24px,5vw,48px) clamp(20px,5vw,40px)' }}>
 
         {/* Back */}
@@ -170,10 +348,7 @@ function ClubDetailModal({ club, allPlayers, onConfirm, onBack }) {
         {/* Club header */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 20, marginBottom: 36 }}>
           {club.badgeUrl && (
-            <img src={club.badgeUrl} alt={club.name}
-              style={{ width: 72, height: 72, objectFit: 'contain', flexShrink: 0 }}
-              onError={e => e.target.style.display = 'none'}
-            />
+            <BadgeImg club={club} size={72} />
           )}
           <div>
             <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'rgba(255,255,255,0.3)', letterSpacing: 3, textTransform: 'uppercase', marginBottom: 6 }}>{club.league}</div>
@@ -187,17 +362,30 @@ function ClubDetailModal({ club, allPlayers, onConfirm, onBack }) {
         </Section>
 
         <Section label="Stadium">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 10, padding: '16px 20px' }}>
             <div>
               <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, color: '#fff', letterSpacing: 1 }}>{club.stadium}</div>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'rgba(255,255,255,0.35)', marginTop: 4 }}>Capacity: {club.capacity?.toLocaleString() || '—'}</div>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'rgba(255,255,255,0.35)', marginTop: 4 }}>
+                Capacity: {club.capacity?.toLocaleString() || '—'}
+              </div>
             </div>
-            <div style={{ fontSize: 36 }}>🏟</div>
+            <svg width="44" height="44" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" opacity="0.75">
+              <ellipse cx="32" cy="34" rx="28" ry="18" fill="none" stroke={color} strokeWidth="2"/>
+              <ellipse cx="32" cy="34" rx="18" ry="11" fill="none" stroke={color} strokeWidth="1.5" opacity="0.5"/>
+              <circle cx="32" cy="34" r="5" fill="none" stroke={color} strokeWidth="1.2" opacity="0.4"/>
+              <path d="M4 34 C4 20 14 14 32 14 C50 14 60 20 60 34" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round"/>
+              <line x1="12" y1="26" x2="12" y2="34" stroke={color} strokeWidth="1.5" opacity="0.4"/>
+              <line x1="22" y1="19" x2="22" y2="34" stroke={color} strokeWidth="1.5" opacity="0.4"/>
+              <line x1="32" y1="16" x2="32" y2="34" stroke={color} strokeWidth="1.5" opacity="0.4"/>
+              <line x1="42" y1="19" x2="42" y2="34" stroke={color} strokeWidth="1.5" opacity="0.4"/>
+              <line x1="52" y1="26" x2="52" y2="34" stroke={color} strokeWidth="1.5" opacity="0.4"/>
+              <line x1="14" y1="34" x2="50" y2="34" stroke={color} strokeWidth="1" opacity="0.3"/>
+            </svg>
           </div>
         </Section>
 
         <Section label="Kits">
-          <div style={{ display: 'flex', gap: 36 }}>
+          <div style={{ display: 'flex', gap: 28, justifyContent: 'center' }}>
             <KitShirt color={club.kitHome} accent={club.kitAway} label="Home" />
             <KitShirt color={club.kitAway} accent={club.kitHome} label="Away" />
           </div>
@@ -206,7 +394,7 @@ function ClubDetailModal({ club, allPlayers, onConfirm, onBack }) {
         <Section label="Board Expectations">
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {(club.expectations || []).map((exp, i) => (
-              <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+              <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 12, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 8, padding: '12px 14px' }}>
                 <div style={{
                   width: 22, height: 22, borderRadius: 4, flexShrink: 0,
                   background: `${color}22`, border: `1px solid ${color}55`,
@@ -231,7 +419,7 @@ function ClubDetailModal({ club, allPlayers, onConfirm, onBack }) {
         </Section>
 
         <Section label="Transfer Budget">
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(74,222,128,0.05)', border: '1px solid rgba(74,222,128,0.15)', borderRadius: 10, padding: '16px 20px' }}>
             <div style={{ fontFamily: 'var(--font-display)', fontSize: 36, color: '#4ade80', letterSpacing: 1 }}>{fmt(club.budget)}</div>
             <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'rgba(255,255,255,0.3)', textAlign: 'right', lineHeight: 1.6 }}>Available for<br/>transfers</div>
           </div>
@@ -250,6 +438,9 @@ function ClubDetailModal({ club, allPlayers, onConfirm, onBack }) {
         >
           Advance as Manager →
         </button>
+
+        {/* Bottom padding so button isn't clipped */}
+        <div style={{ height: 40 }}/>
       </div>
     </div>
   );
@@ -268,11 +459,10 @@ function TeamSelectModal({ allClubs, allPlayers, onSelect, onClose }) {
   const clubsInLeague = useMemo(() => (allClubs || []).filter(c => c.league === currentLeague), [allClubs, currentLeague]);
   const currentClub   = clubsInLeague[clubIdx] || null;
   const country       = LEAGUE_COUNTRY[currentLeague] || { name: currentLeague, flag: '🌍' };
+  const leagueLogo    = LEAGUE_LOGO[currentLeague] || null;
   const color         = currentClub?.color || '#888';
-  const stats         = currentClub ? getStats(currentClub.name, allPlayers) : { att:0, mid:0, def:0, ovr:0 };
-  const stars         = getStars(stats.ovr);
+  const stars         = getStars(getStats(currentClub?.name, allPlayers).ovr);
 
-  /* country arrows also reset club index and drive the league card */
   const prevLeague = () => { setLeagueIdx(i => (i - 1 + leagues.length) % leagues.length); setClubIdx(0); setCardKey(k => k+1); };
   const nextLeague = () => { setLeagueIdx(i => (i + 1) % leagues.length); setClubIdx(0); setCardKey(k => k+1); };
   const prevClub   = () => { setClubIdx(i => (i - 1 + clubsInLeague.length) % clubsInLeague.length); setCardKey(k => k+1); };
@@ -319,7 +509,7 @@ function TeamSelectModal({ allClubs, allPlayers, onSelect, onClose }) {
         position: 'relative', zIndex: 3, minHeight: '100vh',
         display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
         padding: 'clamp(80px,10vw,100px) clamp(16px,4vw,32px) clamp(32px,5vw,48px)',
-        gap: 14,
+        gap: 12,
       }}>
 
         {/* Close */}
@@ -341,9 +531,9 @@ function TeamSelectModal({ allClubs, allPlayers, onSelect, onClose }) {
           Close
         </button>
 
-        <div style={{ width: '100%', maxWidth: 420, display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div style={{ width: '100%', maxWidth: 400, display: 'flex', flexDirection: 'column', gap: 12 }}>
 
-          {/* 1. Country card — arrows here drive both country and league */}
+          {/* 1. Country card */}
           <div style={{
             background: 'rgba(255,255,255,0.05)',
             border: '1px solid rgba(255,255,255,0.1)',
@@ -352,33 +542,26 @@ function TeamSelectModal({ allClubs, allPlayers, onSelect, onClose }) {
           }}>
             <ArrowBtn dir="left" onClick={prevLeague} />
             <div style={{ textAlign: 'center', flex: 1 }}>
-              <div style={{ fontSize: 28, lineHeight: 1, marginBottom: 5 }}>{country.flag}</div>
-              <div style={{ fontFamily: 'var(--font-display)', fontSize: 16, letterSpacing: 3, textTransform: 'uppercase', color: '#fff', lineHeight: 1 }}>{country.name}</div>
+              <div style={{ fontSize: 26, lineHeight: 1, marginBottom: 5 }}>{country.flag}</div>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: 15, letterSpacing: 3, textTransform: 'uppercase', color: '#fff', lineHeight: 1 }}>{country.name}</div>
             </div>
             <ArrowBtn dir="right" onClick={nextLeague} />
           </div>
 
-          {/* 2. Club card — NOT a button, no onClick, badge is faint watermark */}
+          {/* 2. Club card — name → badge → stars, no stats */}
           {currentClub ? (
             <div key={cardKey} style={{
               background: `linear-gradient(160deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.02) 100%)`,
               border: `1.5px solid ${color}55`,
               borderRadius: 16,
-              padding: 'clamp(28px,5vw,40px) clamp(52px,10vw,64px)',
-              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14,
+              padding: '28px 20px 24px',
+              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16,
               boxShadow: `0 0 60px ${color}20, 0 16px 48px rgba(0,0,0,0.5)`,
               animation: 'cardIn 0.25s cubic-bezier(0.34,1.56,0.64,1)',
               position: 'relative', overflow: 'hidden',
             }}>
-              {/* Badge as faint watermark — not a centered hero image */}
-              {currentClub.badgeUrl && (
-                <img src={currentClub.badgeUrl} alt="" style={{
-                  position: 'absolute', inset: 0, width: '100%', height: '100%',
-                  objectFit: 'contain', opacity: 0.08, pointerEvents: 'none', padding: 24,
-                }} onError={e => e.target.style.display = 'none'}/>
-              )}
 
-              {/* Side arrows for cycling clubs */}
+              {/* Side arrows */}
               <div style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', zIndex: 2 }}>
                 <ArrowBtn dir="left" onClick={e => { e.stopPropagation(); prevClub(); }}/>
               </div>
@@ -386,47 +569,58 @@ function TeamSelectModal({ allClubs, allPlayers, onSelect, onClose }) {
                 <ArrowBtn dir="right" onClick={e => { e.stopPropagation(); nextClub(); }}/>
               </div>
 
-              <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, width: '100%' }}>
+              <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14, width: '100%', padding: '0 44px' }}>
+
                 {/* Club name */}
                 <div style={{
                   fontFamily: 'var(--font-display)', fontWeight: 900,
-                  fontSize: 'clamp(18px,5vw,26px)', letterSpacing: 2,
+                  fontSize: 'clamp(17px,5vw,24px)', letterSpacing: 2,
                   textTransform: 'uppercase', color: '#fff', textAlign: 'center',
                   lineHeight: 1.1, textShadow: `0 0 30px ${color}60`,
                 }}>{currentClub.name}</div>
 
+                {/* Badge — centered hero image with SVG fallback */}
+                {currentClub.badgeUrl ? (
+                  <BadgeImg club={currentClub} size={110} />
+                ) : (
+                  <ClubBadgeFallback club={currentClub} size={110} />
+                )}
+
+                {/* Stars */}
                 <Stars count={stars}/>
 
-                {/* Stats — all plain white, no color */}
-                <div style={{ display: 'flex', width: '100%', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, overflow: 'hidden' }}>
-                  {[['ATT', stats.att], ['MID', stats.mid], ['DEF', stats.def]].map(([lbl, val], i) => (
-                    <div key={lbl} style={{ flex: 1, textAlign: 'center', padding: '10px 0', borderRight: i < 2 ? '1px solid rgba(255,255,255,0.07)' : 'none' }}>
-                      <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, color: '#fff', lineHeight: 1 }}>{val || '—'}</div>
-                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'rgba(255,255,255,0.35)', letterSpacing: 2, textTransform: 'uppercase', marginTop: 3 }}>{lbl}</div>
-                    </div>
-                  ))}
-                </div>
-
+                {/* Counter */}
                 <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'rgba(255,255,255,0.2)', letterSpacing: 1 }}>
                   {clubIdx + 1} / {clubsInLeague.length}
                 </div>
               </div>
             </div>
           ) : (
-            <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.25)', fontFamily: 'var(--font-mono)', fontSize: 12, padding: 40 }}>No clubs in this league</div>
+            <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.25)', fontFamily: 'var(--font-mono)', fontSize: 12, padding: 40 }}>
+              No clubs in this league
+            </div>
           )}
 
-          {/* 3. League card — read-only display, reflects active country, no arrows */}
+          {/* 3. League card — centered, with league logo */}
           <div style={{
             background: 'rgba(255,255,255,0.05)',
             border: '1px solid rgba(255,255,255,0.1)',
-            borderRadius: 12, padding: '14px 20px',
+            borderRadius: 12, padding: '14px 16px',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
           }}>
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'rgba(255,255,255,0.3)', letterSpacing: 2, textTransform: 'uppercase', marginBottom: 4 }}>League</div>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'rgba(255,255,255,0.3)', letterSpacing: 2, textTransform: 'uppercase' }}>League</div>
             <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, color: '#fff', letterSpacing: 1 }}>{currentLeague}</div>
+            {leagueLogo && (
+              <img
+                src={leagueLogo}
+                alt={currentLeague}
+                style={{ height: 28, width: 'auto', objectFit: 'contain', opacity: 0.85 }}
+                onError={e => e.target.style.display = 'none'}
+              />
+            )}
           </div>
 
-          {/* Select Club button — opens ClubDetailModal */}
+          {/* Select Club button */}
           {currentClub && (
             <button onClick={() => setDetailClub(currentClub)} style={{
               width: '100%', padding: '14px 0',
@@ -512,8 +706,8 @@ export default function Home() {
         <div style={{ fontFamily:'var(--font-mono)', fontSize:11, letterSpacing:3, color:'rgba(255,255,255,0.25)', textTransform:'uppercase' }}>{loaderProgress}%</div>
       </div>
 
-      {/* Slideshow bg */}
-      <div style={{ position:'fixed', inset:0, zIndex:0 }}>
+      {/* Slideshow bg — hidden when modal open so it doesn't bleed through */}
+      <div style={{ position:'fixed', inset:0, zIndex:0, display: showModal ? 'none' : 'block' }}>
         {SLIDES.map((url, i) => <div key={i} className={`ts-slide-bg ${i === slide ? 'active' : ''}`} style={{ backgroundImage:`url(${url})` }}/>)}
         <div style={{ position:'absolute', inset:0, background:'linear-gradient(to right, rgba(4,6,10,0.97) 0%, rgba(4,6,10,0.82) 50%, rgba(4,6,10,0.35) 100%)' }}/>
         <div style={{ position:'absolute', inset:0, background:'linear-gradient(to top, rgba(4,6,10,0.98) 0%, rgba(4,6,10,0.4) 30%, transparent 60%)' }}/>
