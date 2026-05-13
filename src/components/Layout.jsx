@@ -1,24 +1,25 @@
+import { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import useGameStore from '../store/gameStore';
 
 const NAV = [
   {
-    to: '/squad', label: 'Squad', icon: (
+    to: '/home', label: 'Home', icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" />
-        <path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" />
+        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+        <polyline points="9 22 9 12 15 12 15 22" />
       </svg>
     )
   },
   {
-    to: '/tactics', label: 'Tactics', icon: (
+    to: '/club', label: 'Club', icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-        <rect x="3" y="3" width="18" height="18" rx="2" /><path d="M3 9h18M3 15h18M9 3v18M15 3v18" />
+        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
       </svg>
     )
   },
   {
-    to: '/match', label: 'Match', icon: (
+    to: '/matchday', label: 'Matchday', icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <circle cx="12" cy="12" r="10" />
         <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
@@ -27,17 +28,23 @@ const NAV = [
     )
   },
   {
-    to: '/transfers', label: 'Transfers', icon: (
+    to: '/competitions', label: 'Compete', icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M7 16V4m0 0L3 8m4-4 4 4" /><path d="M17 8v12m0 0 4-4m-4 4-4-4" />
+        <polyline points="14 11 17 8 20 11" />
+        <path d="M17 8v13" />
+        <path d="M8 17H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v3" />
+        <polyline points="10 13 7 16 10 19" />
+        <path d="M7 16h7" />
       </svg>
     )
   },
   {
-    to: '/results', label: 'Results', icon: (
+    to: '/manager', label: 'Manager', icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-        <polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" />
+        <rect x="2" y="7" width="20" height="14" rx="2" ry="2" />
+        <path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2" />
+        <line x1="12" y1="12" x2="12" y2="12" />
+        <path d="M12 12h.01" strokeWidth="3" />
       </svg>
     )
   },
@@ -63,7 +70,6 @@ const CLUB_ABBR = {
   'Borussia Dortmund': 'BVB', 'Juventus': 'JUV',
 };
 
-// Real badge URLs with fallback
 const CLUB_BADGE_URL = {
   'Manchester City':    'https://resources.premierleague.com/premierleague/badges/50/t43.png',
   'Liverpool':          'https://resources.premierleague.com/premierleague/badges/50/t14.png',
@@ -85,7 +91,7 @@ const fmt = (n) => {
 
 function ClubBadge({ club, size = 40 }) {
   const color = CLUB_COLOR[club?.name] || '#888';
-  const abbr = CLUB_ABBR[club?.name] || club?.name?.slice(0,3).toUpperCase() || '—';
+  const abbr = CLUB_ABBR[club?.name] || club?.name?.slice(0, 3).toUpperCase() || '—';
   const badgeUrl = CLUB_BADGE_URL[club?.name];
   const [imgFailed, setImgFailed] = useState(false);
 
@@ -112,7 +118,7 @@ function ClubBadge({ club, size = 40 }) {
   );
 }
 
-import { useState } from 'react';
+export { ClubBadge, CLUB_COLOR, CLUB_ABBR, CLUB_BADGE_URL, fmt };
 
 export default function Layout({ children }) {
   const { myClub, budget, season, week, resetGame } = useGameStore();
@@ -128,6 +134,81 @@ export default function Layout({ children }) {
   return (
     <>
       <style>{`
+        /* ── Global top bar ── */
+        .top-bar {
+          position: fixed;
+          top: 0; left: 0; right: 0;
+          z-index: 150;
+          height: 52px;
+          background: rgba(6,8,9,0.96);
+          border-bottom: 1px solid rgba(255,255,255,0.07);
+          backdrop-filter: blur(16px);
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 0 16px;
+          gap: 12px;
+        }
+        .top-bar-left {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          min-width: 0;
+          flex: 1;
+        }
+        .top-bar-club-name {
+          font-family: var(--font-display);
+          font-size: 14px;
+          font-weight: 700;
+          color: var(--text);
+          letter-spacing: 0.5px;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .top-bar-center {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          flex-shrink: 0;
+        }
+        .top-bar-chip {
+          font-family: var(--font-mono);
+          font-size: 10px;
+          color: var(--text-dim);
+          letter-spacing: 1.5px;
+          text-transform: uppercase;
+          background: rgba(255,255,255,0.05);
+          border: 1px solid rgba(255,255,255,0.07);
+          border-radius: 4px;
+          padding: 3px 8px;
+        }
+        .top-bar-right {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          flex-shrink: 0;
+        }
+        .top-bar-budget {
+          font-family: var(--font-display);
+          font-size: 13px;
+          font-weight: 700;
+          color: var(--green);
+          letter-spacing: 0.5px;
+        }
+        .top-bar-bell {
+          background: none;
+          border: none;
+          cursor: pointer;
+          color: var(--text-muted);
+          display: flex;
+          align-items: center;
+          padding: 4px;
+          transition: color 0.15s;
+          -webkit-tap-highlight-color: transparent;
+        }
+        .top-bar-bell:hover { color: var(--text); }
+
         /* ── Mobile bottom nav ── */
         .bottom-nav {
           display: none;
@@ -184,6 +265,7 @@ export default function Layout({ children }) {
           .sidebar { display: none !important; }
           .bottom-nav { display: block !important; }
           .main-content {
+            padding-top: 52px !important;
             padding-bottom: 72px !important;
           }
           .page-header { padding: 20px 16px 0 !important; }
@@ -194,7 +276,39 @@ export default function Layout({ children }) {
             padding: 0 16px 20px !important;
           }
         }
+
+        @media (min-width: 769px) {
+          .top-bar {
+            left: var(--sidebar-w);
+          }
+          .main-content {
+            padding-top: 52px !important;
+          }
+        }
       `}</style>
+
+      {/* ── Global Top Bar ── */}
+      {myClub && (
+        <div className="top-bar">
+          <div className="top-bar-left">
+            <ClubBadge club={myClub} size={28} />
+            <span className="top-bar-club-name">{myClub.name}</span>
+          </div>
+          <div className="top-bar-center">
+            <span className="top-bar-chip">S{season}</span>
+            <span className="top-bar-chip">W{week}</span>
+          </div>
+          <div className="top-bar-right">
+            <span className="top-bar-budget">{fmt(budget)}</span>
+            <button className="top-bar-bell" title="Notifications">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="layout">
         {/* ── Desktop Sidebar ── */}
