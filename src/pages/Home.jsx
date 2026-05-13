@@ -75,7 +75,7 @@ function Stars({ count }) {
   );
 }
 
-/* ─── Sharp Arrow Button ─── */
+/* ─── Arrow Button ─── */
 function ArrowBtn({ dir, onClick }) {
   return (
     <button onClick={onClick} style={{
@@ -163,83 +163,92 @@ function ClubDetailModal({ club, allPlayers, onConfirm, onBack }) {
           letterSpacing: 2, textTransform: 'uppercase', cursor: 'pointer', padding: '8px 0', marginBottom: 28,
           WebkitTapHighlightColor: 'transparent',
         }}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="15 18 9 12 15 6"/>
-          </svg>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
           Back
         </button>
 
         {/* Club header */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 20, marginBottom: 32 }}>
-          {club.badgeUrl ? (
-            <img src={club.badgeUrl} alt={club.name} style={{ width: 72, height: 72, objectFit: 'contain' }}/>
-          ) : (
-            <div style={{
-              width: 72, height: 72, borderRadius: 12, flexShrink: 0,
-              background: `linear-gradient(135deg, ${color}22, ${color}44)`,
-              border: `2px solid ${color}55`,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontFamily: 'var(--font-display)', fontSize: 20, color, letterSpacing: 1,
-            }}>{club.name?.slice(0,3).toUpperCase()}</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 20, marginBottom: 36 }}>
+          {club.badgeUrl && (
+            <img src={club.badgeUrl} alt={club.name}
+              style={{ width: 72, height: 72, objectFit: 'contain', flexShrink: 0 }}
+              onError={e => e.target.style.display = 'none'}
+            />
           )}
           <div>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(22px,5vw,32px)', fontWeight: 800, color: '#fff', lineHeight: 1.1, letterSpacing: 0.5 }}>{club.name}</div>
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'rgba(255,255,255,0.35)', letterSpacing: 2, textTransform: 'uppercase', marginTop: 6 }}>{club.league}</div>
-            <div style={{ marginTop: 10 }}><Stars count={getStars(stats.ovr)} /></div>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'rgba(255,255,255,0.3)', letterSpacing: 3, textTransform: 'uppercase', marginBottom: 6 }}>{club.league}</div>
+            <div style={{ fontFamily: 'var(--font-display)', fontWeight: 900, fontSize: 'clamp(22px,5vw,34px)', color: '#fff', letterSpacing: 2, textTransform: 'uppercase', lineHeight: 1 }}>{club.name}</div>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color, marginTop: 6 }}>Est. {club.founded}</div>
           </div>
         </div>
 
-        {/* Stats */}
-        <Section label="Squad Ratings">
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
-            {[['OVR', stats.ovr, color], ['ATT', stats.att, '#ef4444'], ['MID', stats.mid, '#3b82f6'], ['DEF', stats.def, '#22c55e']].map(([lbl, val, c]) => (
-              <div key={lbl} style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 8, padding: '14px 8px', textAlign: 'center' }}>
-                <div style={{ fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 800, color: c, lineHeight: 1 }}>{val || '—'}</div>
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'rgba(255,255,255,0.3)', letterSpacing: 2, textTransform: 'uppercase', marginTop: 4 }}>{lbl}</div>
-              </div>
-            ))}
+        <Section label="Club History">
+          <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.6)', lineHeight: 1.8, margin: 0 }}>{club.history}</p>
+        </Section>
+
+        <Section label="Stadium">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, color: '#fff', letterSpacing: 1 }}>{club.stadium}</div>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'rgba(255,255,255,0.35)', marginTop: 4 }}>Capacity: {club.capacity?.toLocaleString() || '—'}</div>
+            </div>
+            <div style={{ fontSize: 36 }}>🏟</div>
           </div>
         </Section>
 
-        {/* Kit */}
-        <Section label="Kit">
-          <div style={{ display: 'flex', gap: 24, justifyContent: 'center', padding: '8px 0' }}>
-            <KitShirt color={color} accent="#fff" label="Home" />
-            <KitShirt color="#1a1a2e" accent={color} label="Away" />
-            <KitShirt color={color + '88'} accent="#fff" label="Third" />
+        <Section label="Kits">
+          <div style={{ display: 'flex', gap: 36 }}>
+            <KitShirt color={club.kitHome} accent={club.kitAway} label="Home" />
+            <KitShirt color={club.kitAway} accent={club.kitHome} label="Away" />
           </div>
         </Section>
 
-        {/* Club info */}
-        <Section label="Club Info">
+        <Section label="Board Expectations">
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {[
-              ['League', club.league],
-              ['Country', LEAGUE_COUNTRY[club.league]?.name || '—'],
-              ['Budget', fmt(club.budget)],
-              ['Transfer Budget', fmt(club.transferBudget || club.budget)],
-            ].map(([k, v]) => (
-              <div key={k} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'rgba(255,255,255,0.35)', letterSpacing: 1.5, textTransform: 'uppercase' }}>{k}</span>
-                <span style={{ fontFamily: 'var(--font-display)', fontSize: 14, color: '#fff', fontWeight: 600 }}>{v || '—'}</span>
+            {(club.expectations || []).map((exp, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                <div style={{
+                  width: 22, height: 22, borderRadius: 4, flexShrink: 0,
+                  background: `${color}22`, border: `1px solid ${color}55`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontFamily: 'var(--font-mono)', fontSize: 10, color,
+                }}>{i + 1}</div>
+                <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.7)', lineHeight: 1.5, paddingTop: 2 }}>{exp}</div>
               </div>
             ))}
           </div>
         </Section>
 
-        {/* Confirm */}
+        <Section label="Squad Strength">
+          <div style={{ display: 'flex', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, overflow: 'hidden' }}>
+            {[['ATT', stats.att], ['MID', stats.mid], ['DEF', stats.def], ['OVR', stats.ovr]].map(([lbl, val], i, arr) => (
+              <div key={lbl} style={{ flex: 1, textAlign: 'center', padding: '14px 0', borderRight: i < arr.length - 1 ? '1px solid rgba(255,255,255,0.07)' : 'none' }}>
+                <div style={{ fontFamily: 'var(--font-display)', fontSize: 26, color: lbl === 'OVR' ? color : '#fff', lineHeight: 1 }}>{val || '—'}</div>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'rgba(255,255,255,0.35)', letterSpacing: 2, textTransform: 'uppercase', marginTop: 4 }}>{lbl}</div>
+              </div>
+            ))}
+          </div>
+        </Section>
+
+        <Section label="Transfer Budget">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 36, color: '#4ade80', letterSpacing: 1 }}>{fmt(club.budget)}</div>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'rgba(255,255,255,0.3)', textAlign: 'right', lineHeight: 1.6 }}>Available for<br/>transfers</div>
+          </div>
+        </Section>
+
         <button onClick={onConfirm} style={{
-          width: '100%', padding: '14px 0',
+          width: '100%', padding: '16px 0', marginTop: 8,
           background: '#4ade80', color: '#000', border: 'none', borderRadius: 8,
-          fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 700,
+          fontFamily: 'var(--font-display)', fontSize: 17, fontWeight: 700,
           letterSpacing: 3, textTransform: 'uppercase', cursor: 'pointer',
-          boxShadow: '0 4px 20px rgba(74,222,128,0.25)', transition: 'all 0.2s',
+          boxShadow: '0 4px 24px rgba(74,222,128,0.3)', transition: 'all 0.2s',
           WebkitTapHighlightColor: 'transparent',
         }}
           onMouseEnter={e => e.currentTarget.style.background = '#2ecc71'}
           onMouseLeave={e => e.currentTarget.style.background = '#4ade80'}
         >
-          Confirm Selection
+          Advance as Manager →
         </button>
       </div>
     </div>
@@ -247,145 +256,193 @@ function ClubDetailModal({ club, allPlayers, onConfirm, onBack }) {
 }
 
 /* ─── Team Select Modal ─── */
-function TeamSelectModal({ allClubs, allPlayers, allLeagues, onSelect, onClose }) {
-  const [search, setSearch]         = useState('');
-  const [activeLeague, setLeague]   = useState('All');
-  const [currentIdx, setCurrentIdx] = useState(0);
+function TeamSelectModal({ allClubs, allPlayers, onSelect, onClose }) {
+  const leagues = useMemo(() => [...new Set((allClubs || []).map(c => c.league).filter(Boolean))], [allClubs]);
+
+  const [leagueIdx, setLeagueIdx]   = useState(0);
+  const [clubIdx, setClubIdx]       = useState(0);
+  const [cardKey, setCardKey]       = useState(0);
   const [detailClub, setDetailClub] = useState(null);
 
-  const leagues = useMemo(() => ['All', ...new Set((allClubs || []).map(c => c.league).filter(Boolean))], [allClubs]);
+  const currentLeague = leagues[leagueIdx] || '';
+  const clubsInLeague = useMemo(() => (allClubs || []).filter(c => c.league === currentLeague), [allClubs, currentLeague]);
+  const currentClub   = clubsInLeague[clubIdx] || null;
+  const country       = LEAGUE_COUNTRY[currentLeague] || { name: currentLeague, flag: '🌍' };
+  const color         = currentClub?.color || '#888';
+  const stats         = currentClub ? getStats(currentClub.name, allPlayers) : { att:0, mid:0, def:0, ovr:0 };
+  const stars         = getStars(stats.ovr);
 
-  const filtered = useMemo(() => {
-    return (allClubs || []).filter(c => {
-      const matchLeague = activeLeague === 'All' || c.league === activeLeague;
-      const matchSearch = !search || c.name.toLowerCase().includes(search.toLowerCase());
-      return matchLeague && matchSearch;
-    });
-  }, [allClubs, activeLeague, search]);
+  /* country arrows also reset club index and drive the league card */
+  const prevLeague = () => { setLeagueIdx(i => (i - 1 + leagues.length) % leagues.length); setClubIdx(0); setCardKey(k => k+1); };
+  const nextLeague = () => { setLeagueIdx(i => (i + 1) % leagues.length); setClubIdx(0); setCardKey(k => k+1); };
+  const prevClub   = () => { setClubIdx(i => (i - 1 + clubsInLeague.length) % clubsInLeague.length); setCardKey(k => k+1); };
+  const nextClub   = () => { setClubIdx(i => (i + 1) % clubsInLeague.length); setCardKey(k => k+1); };
 
-  const currentClub = filtered[currentIdx];
-
-  useEffect(() => { setCurrentIdx(0); }, [activeLeague, search]);
-
-  const prev = () => setCurrentIdx(i => (i - 1 + filtered.length) % filtered.length);
-  const next = () => setCurrentIdx(i => (i + 1) % filtered.length);
+  useEffect(() => {
+    const handler = (e) => {
+      if (detailClub) return;
+      if (e.key === 'ArrowLeft')  prevClub();
+      if (e.key === 'ArrowRight') nextClub();
+      if (e.key === 'Escape')     onClose();
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [clubsInLeague.length, detailClub]);
 
   if (detailClub) {
-    return (
-      <ClubDetailModal
-        club={detailClub}
-        allPlayers={allPlayers}
-        onConfirm={() => onSelect(detailClub)}
-        onBack={() => setDetailClub(null)}
-      />
-    );
+    return <ClubDetailModal club={detailClub} allPlayers={allPlayers} onConfirm={() => onSelect(detailClub)} onBack={() => setDetailClub(null)} />;
   }
 
-  const color = currentClub?.color || '#4ade80';
-  const stats = getStats(currentClub?.name, allPlayers);
-
   return (
-    <div style={{
-      position: 'fixed', inset: 0, zIndex: 500,
-      background: 'rgba(4,6,10,0.97)',
-      backdropFilter: 'blur(20px)',
-      overflowY: 'auto',
-      animation: 'modalIn 0.25s ease',
-    }}>
-      <style>{`@keyframes modalIn { from { opacity:0; transform:scale(0.98) } to { opacity:1; transform:scale(1) } }`}</style>
+    <div style={{ position: 'fixed', inset: 0, zIndex: 500, overflowY: 'auto', animation: 'tsIn 0.3s ease' }}>
+      <style>{`
+        @keyframes tsIn   { from { opacity:0 } to { opacity:1 } }
+        @keyframes cardIn { from { opacity:0; transform:scale(0.92) translateY(12px) } to { opacity:1; transform:scale(1) translateY(0) } }
+        @keyframes bgFade { from { opacity:0 } to { opacity:0.07 } }
+      `}</style>
 
-      <div style={{ maxWidth: 720, margin: '0 auto', padding: 'clamp(20px,5vw,40px) clamp(16px,5vw,32px)', minHeight: '100dvh', display: 'flex', flexDirection: 'column' }}>
+      {/* Full-screen badge bg */}
+      {currentClub?.badgeUrl && (
+        <div key={`bg-${cardKey}`} style={{
+          position: 'fixed', inset: 0, zIndex: 0,
+          backgroundImage: `url(${currentClub.badgeUrl})`,
+          backgroundSize: '55%', backgroundPosition: 'center',
+          backgroundRepeat: 'no-repeat',
+          animation: 'bgFade 0.4s ease forwards',
+        }}/>
+      )}
+      <div style={{ position: 'fixed', inset: 0, zIndex: 1, background: 'rgba(4,6,10,0.93)', backdropFilter: 'blur(3px)' }}/>
+      <div style={{ position: 'fixed', inset: 0, zIndex: 2, pointerEvents: 'none', background: `radial-gradient(ellipse at 50% 50%, ${color}14 0%, transparent 65%)`, transition: 'background 0.4s' }}/>
 
-        {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
-          <div>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(20px,5vw,28px)', fontWeight: 800, color: '#fff', letterSpacing: 1 }}>Choose Your Club</div>
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'rgba(255,255,255,0.3)', letterSpacing: 2, textTransform: 'uppercase', marginTop: 4 }}>{filtered.length} clubs available</div>
+      {/* Content */}
+      <div style={{
+        position: 'relative', zIndex: 3, minHeight: '100vh',
+        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+        padding: 'clamp(80px,10vw,100px) clamp(16px,4vw,32px) clamp(32px,5vw,48px)',
+        gap: 14,
+      }}>
+
+        {/* Close */}
+        <button onClick={onClose} style={{
+          position: 'fixed', top: 20, right: 20, zIndex: 10,
+          background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)',
+          borderRadius: 6, padding: '8px 14px',
+          display: 'flex', alignItems: 'center', gap: 7,
+          color: 'rgba(255,255,255,0.45)', cursor: 'pointer',
+          fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: 1, textTransform: 'uppercase',
+          transition: 'all 0.15s', WebkitTapHighlightColor: 'transparent',
+        }}
+          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.12)'; e.currentTarget.style.color = '#fff'; }}
+          onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.06)'; e.currentTarget.style.color = 'rgba(255,255,255,0.45)'; }}
+        >
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+          Close
+        </button>
+
+        <div style={{ width: '100%', maxWidth: 420, display: 'flex', flexDirection: 'column', gap: 12 }}>
+
+          {/* 1. Country card — arrows here drive both country and league */}
+          <div style={{
+            background: 'rgba(255,255,255,0.05)',
+            border: '1px solid rgba(255,255,255,0.1)',
+            borderRadius: 12, padding: '14px 16px',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          }}>
+            <ArrowBtn dir="left" onClick={prevLeague} />
+            <div style={{ textAlign: 'center', flex: 1 }}>
+              <div style={{ fontSize: 28, lineHeight: 1, marginBottom: 5 }}>{country.flag}</div>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: 16, letterSpacing: 3, textTransform: 'uppercase', color: '#fff', lineHeight: 1 }}>{country.name}</div>
+            </div>
+            <ArrowBtn dir="right" onClick={nextLeague} />
           </div>
-          <button onClick={onClose} style={{ background: 'rgba(255,255,255,0.07)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: 8, width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'rgba(255,255,255,0.5)', WebkitTapHighlightColor: 'transparent' }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-          </button>
-        </div>
 
-        {/* Search */}
-        <div style={{ position: 'relative', marginBottom: 16 }}>
-          <svg style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', opacity: 0.3 }} width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-          <input
-            value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="Search clubs..."
-            style={{ width: '100%', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8, padding: '10px 12px 10px 36px', color: '#fff', fontFamily: 'var(--font-body)', fontSize: 14, outline: 'none', boxSizing: 'border-box' }}
-          />
-        </div>
+          {/* 2. Club card — NOT a button, no onClick, badge is faint watermark */}
+          {currentClub ? (
+            <div key={cardKey} style={{
+              background: `linear-gradient(160deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.02) 100%)`,
+              border: `1.5px solid ${color}55`,
+              borderRadius: 16,
+              padding: 'clamp(28px,5vw,40px) clamp(52px,10vw,64px)',
+              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14,
+              boxShadow: `0 0 60px ${color}20, 0 16px 48px rgba(0,0,0,0.5)`,
+              animation: 'cardIn 0.25s cubic-bezier(0.34,1.56,0.64,1)',
+              position: 'relative', overflow: 'hidden',
+            }}>
+              {/* Badge as faint watermark — not a centered hero image */}
+              {currentClub.badgeUrl && (
+                <img src={currentClub.badgeUrl} alt="" style={{
+                  position: 'absolute', inset: 0, width: '100%', height: '100%',
+                  objectFit: 'contain', opacity: 0.08, pointerEvents: 'none', padding: 24,
+                }} onError={e => e.target.style.display = 'none'}/>
+              )}
 
-        {/* League filter */}
-        <div style={{ display: 'flex', gap: 8, overflowX: 'auto', marginBottom: 24, paddingBottom: 4 }}>
-          {leagues.map(l => (
-            <button key={l} onClick={() => setLeague(l)} style={{
-              flexShrink: 0, padding: '6px 14px', borderRadius: 20,
-              border: `1px solid ${activeLeague === l ? '#4ade80' : 'rgba(255,255,255,0.1)'}`,
-              background: activeLeague === l ? 'rgba(74,222,128,0.12)' : 'transparent',
-              color: activeLeague === l ? '#4ade80' : 'rgba(255,255,255,0.4)',
-              fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: 1.5,
-              textTransform: 'uppercase', cursor: 'pointer',
-              WebkitTapHighlightColor: 'transparent',
-            }}>{l}</button>
-          ))}
-        </div>
+              {/* Side arrows for cycling clubs */}
+              <div style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', zIndex: 2 }}>
+                <ArrowBtn dir="left" onClick={e => { e.stopPropagation(); prevClub(); }}/>
+              </div>
+              <div style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', zIndex: 2 }}>
+                <ArrowBtn dir="right" onClick={e => { e.stopPropagation(); nextClub(); }}/>
+              </div>
 
-        {/* Club carousel */}
-        {currentClub ? (
-          <>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-              <ArrowBtn dir="left" onClick={prev} />
-              <div style={{ flex: 1, background: `linear-gradient(135deg, ${color}0d, rgba(255,255,255,0.03))`, border: `1px solid ${color}22`, borderRadius: 12, padding: 'clamp(20px,4vw,28px)', textAlign: 'center', cursor: 'pointer' }} onClick={() => setDetailClub(currentClub)}>
-                {currentClub.badgeUrl ? (
-                  <img src={currentClub.badgeUrl} alt={currentClub.name} style={{ width: 80, height: 80, objectFit: 'contain', marginBottom: 16 }}/>
-                ) : (
-                  <div style={{ width: 80, height: 80, borderRadius: 16, margin: '0 auto 16px', background: `linear-gradient(135deg, ${color}22, ${color}44)`, border: `2px solid ${color}55`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontSize: 22, color, letterSpacing: 1 }}>
-                    {currentClub.name?.slice(0,3).toUpperCase()}
-                  </div>
-                )}
-                <div style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(18px,4vw,24px)', fontWeight: 800, color: '#fff', marginBottom: 4 }}>{currentClub.name}</div>
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'rgba(255,255,255,0.3)', letterSpacing: 2, textTransform: 'uppercase', marginBottom: 16 }}>{currentClub.league}</div>
-                <Stars count={getStars(stats.ovr)} />
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginTop: 16 }}>
-                  {[['ATT', stats.att, '#ef4444'], ['MID', stats.mid, '#3b82f6'], ['DEF', stats.def, '#22c55e']].map(([lbl, val, c]) => (
-                    <div key={lbl} style={{ background: 'rgba(255,255,255,0.04)', borderRadius: 6, padding: '10px 4px' }}>
-                      <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 800, color: c }}>{val || '—'}</div>
-                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: 'rgba(255,255,255,0.3)', letterSpacing: 2, textTransform: 'uppercase', marginTop: 2 }}>{lbl}</div>
+              <div style={{ position: 'relative', zIndex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, width: '100%' }}>
+                {/* Club name */}
+                <div style={{
+                  fontFamily: 'var(--font-display)', fontWeight: 900,
+                  fontSize: 'clamp(18px,5vw,26px)', letterSpacing: 2,
+                  textTransform: 'uppercase', color: '#fff', textAlign: 'center',
+                  lineHeight: 1.1, textShadow: `0 0 30px ${color}60`,
+                }}>{currentClub.name}</div>
+
+                <Stars count={stars}/>
+
+                {/* Stats — all plain white, no color */}
+                <div style={{ display: 'flex', width: '100%', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 8, overflow: 'hidden' }}>
+                  {[['ATT', stats.att], ['MID', stats.mid], ['DEF', stats.def]].map(([lbl, val], i) => (
+                    <div key={lbl} style={{ flex: 1, textAlign: 'center', padding: '10px 0', borderRight: i < 2 ? '1px solid rgba(255,255,255,0.07)' : 'none' }}>
+                      <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, color: '#fff', lineHeight: 1 }}>{val || '—'}</div>
+                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'rgba(255,255,255,0.35)', letterSpacing: 2, textTransform: 'uppercase', marginTop: 3 }}>{lbl}</div>
                     </div>
                   ))}
                 </div>
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'rgba(255,255,255,0.2)', marginTop: 14, letterSpacing: 1 }}>Tap for full details</div>
+
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'rgba(255,255,255,0.2)', letterSpacing: 1 }}>
+                  {clubIdx + 1} / {clubsInLeague.length}
+                </div>
               </div>
-              <ArrowBtn dir="right" onClick={next} />
             </div>
+          ) : (
+            <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.25)', fontFamily: 'var(--font-mono)', fontSize: 12, padding: 40 }}>No clubs in this league</div>
+          )}
 
-            <div style={{ textAlign: 'center', fontFamily: 'var(--font-mono)', fontSize: 10, color: 'rgba(255,255,255,0.2)', marginBottom: 20, letterSpacing: 1 }}>
-              {currentIdx + 1} / {filtered.length}
-            </div>
-
-            {currentClub && (
-              <button onClick={() => setDetailClub(currentClub)} style={{
-                width: '100%', padding: '14px 0',
-                background: '#4ade80', color: '#000', border: 'none', borderRadius: 8,
-                fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 700,
-                letterSpacing: 3, textTransform: 'uppercase', cursor: 'pointer',
-                boxShadow: '0 4px 20px rgba(74,222,128,0.25)', transition: 'all 0.2s',
-                WebkitTapHighlightColor: 'transparent',
-              }}
-                onMouseEnter={e => e.currentTarget.style.background = '#2ecc71'}
-                onMouseLeave={e => e.currentTarget.style.background = '#4ade80'}
-              >
-                Select Club
-              </button>
-            )}
-          </>
-        ) : (
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.2)', fontFamily: 'var(--font-mono)', fontSize: 12, letterSpacing: 2 }}>
-            NO CLUBS FOUND
+          {/* 3. League card — read-only display, reflects active country, no arrows */}
+          <div style={{
+            background: 'rgba(255,255,255,0.05)',
+            border: '1px solid rgba(255,255,255,0.1)',
+            borderRadius: 12, padding: '14px 20px',
+          }}>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'rgba(255,255,255,0.3)', letterSpacing: 2, textTransform: 'uppercase', marginBottom: 4 }}>League</div>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, color: '#fff', letterSpacing: 1 }}>{currentLeague}</div>
           </div>
-        )}
+
+          {/* Select Club button — opens ClubDetailModal */}
+          {currentClub && (
+            <button onClick={() => setDetailClub(currentClub)} style={{
+              width: '100%', padding: '14px 0',
+              background: '#4ade80', color: '#000', border: 'none', borderRadius: 8,
+              fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 700,
+              letterSpacing: 3, textTransform: 'uppercase', cursor: 'pointer',
+              boxShadow: '0 4px 20px rgba(74,222,128,0.25)', transition: 'all 0.2s',
+              WebkitTapHighlightColor: 'transparent',
+            }}
+              onMouseEnter={e => e.currentTarget.style.background = '#2ecc71'}
+              onMouseLeave={e => e.currentTarget.style.background = '#4ade80'}
+            >
+              Select Club
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -396,11 +453,11 @@ export default function Home() {
   const { allClubs, allLeagues, allPlayers, chooseClub } = useGameStore();
   const navigate = useNavigate();
 
-  const [slide, setSlide]               = useState(0);
-  const [loaded, setLoaded]             = useState(false);
+  const [slide, setSlide]                   = useState(0);
+  const [loaded, setLoaded]                 = useState(false);
   const [loaderProgress, setLoaderProgress] = useState(0);
-  const [loaderDone, setLoaderDone]     = useState(false);
-  const [showModal, setShowModal]       = useState(false);
+  const [loaderDone, setLoaderDone]         = useState(false);
+  const [showModal, setShowModal]           = useState(false);
 
   useEffect(() => {
     let progress = 0;
@@ -428,7 +485,6 @@ export default function Home() {
     return () => { document.body.style.overflow = ''; };
   }, [showModal]);
 
-  // ── CHANGED: navigate to /home (dashboard) after club select ──
   const handleSelect = (club) => { chooseClub(club); setShowModal(false); navigate('/home'); };
 
   return (
@@ -467,7 +523,6 @@ export default function Home() {
       <div style={{ position:'relative', zIndex:1, minHeight:'100dvh', display:'flex', flexDirection:'column', justifyContent:'space-between', opacity: loaded ? 1 : 0, transition:'opacity 0.5s ease' }}>
         <div style={{ flex:1, display:'flex', flexDirection:'column', justifyContent:'center', padding:'clamp(60px,10vw,100px) clamp(24px,8vw,80px) clamp(40px,6vw,60px)' }}>
           <div style={{ maxWidth: 620 }}>
-
             <h1 className="hero-h1" style={{
               fontFamily:'var(--font-display)', fontWeight:900,
               fontSize:'clamp(56px,13vw,120px)',
