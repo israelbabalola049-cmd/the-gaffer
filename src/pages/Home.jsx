@@ -369,18 +369,7 @@ function ClubDetailModal({ club, allPlayers, onConfirm, onBack }) {
                 Capacity: {club.capacity?.toLocaleString() || '—'}
               </div>
             </div>
-            <svg width="44" height="44" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" opacity="0.75">
-              <ellipse cx="32" cy="34" rx="28" ry="18" fill="none" stroke={color} strokeWidth="2"/>
-              <ellipse cx="32" cy="34" rx="18" ry="11" fill="none" stroke={color} strokeWidth="1.5" opacity="0.5"/>
-              <circle cx="32" cy="34" r="5" fill="none" stroke={color} strokeWidth="1.2" opacity="0.4"/>
-              <path d="M4 34 C4 20 14 14 32 14 C50 14 60 20 60 34" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round"/>
-              <line x1="12" y1="26" x2="12" y2="34" stroke={color} strokeWidth="1.5" opacity="0.4"/>
-              <line x1="22" y1="19" x2="22" y2="34" stroke={color} strokeWidth="1.5" opacity="0.4"/>
-              <line x1="32" y1="16" x2="32" y2="34" stroke={color} strokeWidth="1.5" opacity="0.4"/>
-              <line x1="42" y1="19" x2="42" y2="34" stroke={color} strokeWidth="1.5" opacity="0.4"/>
-              <line x1="52" y1="26" x2="52" y2="34" stroke={color} strokeWidth="1.5" opacity="0.4"/>
-              <line x1="14" y1="34" x2="50" y2="34" stroke={color} strokeWidth="1" opacity="0.3"/>
-            </svg>
+            <div style={{ fontSize: 36 }}>🏟️</div>
           </div>
         </Section>
 
@@ -589,10 +578,7 @@ function TeamSelectModal({ allClubs, allPlayers, onSelect, onClose }) {
                 {/* Stars */}
                 <Stars count={stars}/>
 
-                {/* Counter */}
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'rgba(255,255,255,0.2)', letterSpacing: 1 }}>
-                  {clubIdx + 1} / {clubsInLeague.length}
-                </div>
+
               </div>
             </div>
           ) : (
