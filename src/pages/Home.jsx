@@ -541,26 +541,10 @@ function UnifiedModal({ isOpen, onClose, onComplete, allClubs, allPlayers }) {
       {/* ── Backdrop ── */}
       <div style={{ position:'absolute', inset:0, background:'rgba(4,6,10,0.97)', backdropFilter:'blur(10px)' }}/>
 
-      {/* ── Club badge full-bg (clubs + detail phases) ── */}
-      {(phase==='clubs' || phase==='detail') && currentClub?.badgeUrl && (
-        <div key={`modal-bg-${cardKey}`} style={{ position:'absolute', inset:0, backgroundImage:`url(${currentClub.badgeUrl})`, backgroundSize:'55%', backgroundPosition:'center', backgroundRepeat:'no-repeat', opacity:0, animation:'bgFade 0.4s ease forwards', pointerEvents:'none' }}/>
-      )}
-      {(phase==='clubs' || phase==='detail') && (
-        <div style={{ position:'absolute', inset:0, pointerEvents:'none', background:`radial-gradient(ellipse at 50% 50%, ${color}12 0%, transparent 65%)`, transition:'background 0.4s' }}/>
-      )}
+      {/* ── No full-screen badge bg — each phase manages its own ── */}
 
-      {/* ── Top bar: back + close ── */}
-      <div style={{ position:'absolute', top:0, left:0, right:0, zIndex:10, display:'flex', alignItems:'center', justifyContent:'space-between', padding:'18px 20px' }}>
-        {canGoBack ? (
-          <button onClick={handleBack} style={{ background:'none', border:'none', color:'rgba(255,255,255,0.4)', fontFamily:'var(--font-mono)', fontSize:11, letterSpacing:2, textTransform:'uppercase', cursor:'pointer', display:'flex', alignItems:'center', gap:8, WebkitTapHighlightColor:'transparent' }}
-            onMouseEnter={e=>e.currentTarget.style.color='#fff'}
-            onMouseLeave={e=>e.currentTarget.style.color='rgba(255,255,255,0.4)'}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-            Back
-          </button>
-        ) : <div/>}
-
+      {/* ── Top bar: close only ── */}
+      <div style={{ position:'absolute', top:0, left:0, right:0, zIndex:10, display:'flex', alignItems:'center', justifyContent:'flex-end', padding:'18px 20px' }}>
         <button onClick={onClose} style={{ background:'none', border:'none', color:'rgba(255,255,255,0.35)', cursor:'pointer', display:'flex', alignItems:'center', gap:6, fontFamily:'var(--font-mono)', fontSize:11, letterSpacing:2, textTransform:'uppercase', WebkitTapHighlightColor:'transparent' }}
           onMouseEnter={e=>e.currentTarget.style.color='#fff'}
           onMouseLeave={e=>e.currentTarget.style.color='rgba(255,255,255,0.35)'}
