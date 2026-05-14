@@ -1,17 +1,17 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useGameStore from '../store/gameStore';
 
-/* ─── Slideshow images ─── */
+/* ─── Slideshow ─── */
 const SLIDES = [
-  { url: 'https://images.unsplash.com/photo-1522778119026-d647f0596c20?w=1920&q=85', pos: 'center center' },
-  { url: 'https://images.unsplash.com/photo-1431324155629-1a6deb1dec8d?w=1920&q=85', pos: 'center 30%' },
-  { url: 'https://images.unsplash.com/photo-1529900748604-07564a03e7a6?w=1920&q=85', pos: 'center center' },
-  { url: 'https://images.unsplash.com/photo-1614632537197-38a17061c2bd?w=1920&q=85', pos: 'center 40%' },
-  { url: 'https://images.unsplash.com/photo-1508098682722-e99c43a406b2?w=1920&q=85', pos: 'center center' },
-  { url: 'https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=1920&q=85', pos: 'center 20%' },
-  { url: 'https://images.unsplash.com/photo-1543326727-cf6c39e8f84c?w=1920&q=85', pos: 'center center' },
-  { url: 'https://images.unsplash.com/photo-1551958219-acbc0b81e5f5?w=1920&q=85', pos: 'center 35%' },
+  { url: 'https://images.unsplash.com/photo-1522778119026-d647f0596c20?w=1920&q=85', pos: 'center center', motion: 'zoom-in' },
+  { url: 'https://images.unsplash.com/photo-1431324155629-1a6deb1dec8d?w=1920&q=85', pos: 'center 30%',   motion: 'pan-right' },
+  { url: 'https://images.unsplash.com/photo-1529900748604-07564a03e7a6?w=1920&q=85', pos: 'center center', motion: 'zoom-out' },
+  { url: 'https://images.unsplash.com/photo-1614632537197-38a17061c2bd?w=1920&q=85', pos: 'center 40%',   motion: 'pan-left' },
+  { url: 'https://images.unsplash.com/photo-1508098682722-e99c43a406b2?w=1920&q=85', pos: 'center center', motion: 'zoom-in' },
+  { url: 'https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=1920&q=85', pos: 'center 20%',   motion: 'pan-right' },
+  { url: 'https://images.unsplash.com/photo-1543326727-cf6c39e8f84c?w=1920&q=85', pos: 'center center', motion: 'zoom-out' },
+  { url: 'https://images.unsplash.com/photo-1551958219-acbc0b81e5f5?w=1920&q=85', pos: 'center 35%',   motion: 'pan-left' },
 ];
 
 const LEAGUE_COUNTRY = {
@@ -25,18 +25,29 @@ const LEAGUE_COUNTRY = {
   'Super Lig':        { name: 'Turkey',      flag: '🇹🇷' },
 };
 
+const LEAGUE_LOGO = {
+  'Premier League':   'https://upload.wikimedia.org/wikipedia/en/f/f2/Premier_League_Logo.svg',
+  'La Liga':          'https://upload.wikimedia.org/wikipedia/commons/5/54/LaLiga_EA_Sports_logo_%28Vertical%29.svg',
+  'Bundesliga':       'https://upload.wikimedia.org/wikipedia/en/d/df/Bundesliga_logo_%282017%29.svg',
+  'Serie A':          'https://upload.wikimedia.org/wikipedia/en/e/e1/Serie_A_logo_%282019%29.svg',
+  'Ligue 1':          'https://upload.wikimedia.org/wikipedia/commons/e/e7/Ligue_1_McDonald%27s_logo.svg',
+  'Champions League': 'https://upload.wikimedia.org/wikipedia/en/b/bf/UEFA_Champions_League_logo_2.svg',
+  'Eredivisie':       'https://upload.wikimedia.org/wikipedia/commons/0/09/Eredivisie_nieuw_logo_2017-.svg',
+  'Super Lig':        'https://upload.wikimedia.org/wikipedia/commons/f/f4/S%C3%BCper_Lig_logo.svg',
+};
+
 const fmt = (n) => {
   if (!n) return '—';
-  if (n >= 1e9) return `£${(n / 1e9).toFixed(1)}B`;
-  if (n >= 1e6) return `£${(n / 1e6).toFixed(0)}M`;
-  if (n >= 1e3) return `£${(n / 1e3).toFixed(0)}K`;
+  if (n >= 1e9) return `£${(n/1e9).toFixed(1)}B`;
+  if (n >= 1e6) return `£${(n/1e6).toFixed(0)}M`;
+  if (n >= 1e3) return `£${(n/1e3).toFixed(0)}K`;
   return `£${n}`;
 };
 
 const getStats = (clubName, allPlayers) => {
-  const players = (allPlayers || []).filter(p => p.club === clubName);
-  if (!players.length) return { att: 0, mid: 0, def: 0, ovr: 0 };
-  const avg = arr => arr.length ? Math.round(arr.reduce((s, p) => s + p.overall, 0) / arr.length) : 0;
+  const players = (allPlayers||[]).filter(p => p.club === clubName);
+  if (!players.length) return { att:0, mid:0, def:0, ovr:0 };
+  const avg = arr => arr.length ? Math.round(arr.reduce((s,p) => s+p.overall, 0)/arr.length) : 0;
   return {
     att: avg(players.filter(p => ['ST','LW','RW','CAM','CF'].includes(p.position))),
     mid: avg(players.filter(p => ['CM','CDM','LM','RM'].includes(p.position))),
@@ -56,7 +67,7 @@ const getStars = (ovr) => {
 /* ─── Stars ─── */
 function Stars({ count }) {
   return (
-    <div style={{ display: 'flex', gap: 5, justifyContent: 'center' }}>
+    <div style={{ display:'flex', gap:5, justifyContent:'center' }}>
       {[1,2,3,4,5].map(i => {
         const full = i <= Math.floor(count);
         const half = !full && i === Math.ceil(count) && count % 1 !== 0;
@@ -80,12 +91,12 @@ function Stars({ count }) {
 }
 
 /* ─── Club Badge Fallback ─── */
-function ClubBadgeFallback({ club, size = 110 }) {
+function ClubBadgeFallback({ club, size=110 }) {
   const color = club?.color || '#888';
   const name  = club?.name  || '';
-  const hash  = name.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
+  const hash  = name.split('').reduce((a,c) => a+c.charCodeAt(0), 0);
   const style = hash % 5;
-  const half  = size / 2;
+  const half  = size/2;
   const s     = size;
   const shields = [
     `M ${half} ${s*.06} L ${s*.92} ${s*.22} L ${s*.92} ${s*.58} Q ${s*.92} ${s*.82} ${half} ${s*.96} Q ${s*.08} ${s*.82} ${s*.08} ${s*.58} L ${s*.08} ${s*.22} Z`,
@@ -94,9 +105,9 @@ function ClubBadgeFallback({ club, size = 110 }) {
     `M ${half} ${s*.04} L ${s*.9} ${s*.26} L ${s*.9} ${s*.68} L ${half} ${s*.96} L ${s*.1} ${s*.68} L ${s*.1} ${s*.26} Z`,
     `M ${s*.1} ${s*.18} L ${s*.35} ${s*.06} L ${half} ${s*.14} L ${s*.65} ${s*.06} L ${s*.9} ${s*.18} L ${s*.9} ${s*.62} Q ${s*.9} ${s*.84} ${half} ${s*.96} Q ${s*.1} ${s*.84} ${s*.1} ${s*.62} Z`,
   ];
-  const abbr = name.split(' ').map(w => w[0]).join('').slice(0,3).toUpperCase();
+  const abbr = name.split(' ').map(w=>w[0]).join('').slice(0,3).toUpperCase();
   return (
-    <svg width={size} height={size} viewBox={`0 0 ${s} ${s}`} xmlns="http://www.w3.org/2000/svg">
+    <svg width={size} height={size} viewBox={`0 0 ${s} ${s}`}>
       <defs>
         <linearGradient id={`fbg-${abbr}`} x1="0%" y1="0%" x2="100%" y2="100%">
           <stop offset="0%" stopColor={color} stopOpacity="0.35"/>
@@ -107,43 +118,38 @@ function ClubBadgeFallback({ club, size = 110 }) {
       <path d={shields[style]} fill="none" stroke={color} strokeWidth={s*.012} strokeLinejoin="round" opacity="0.3"
         transform={`scale(0.82) translate(${s*.1} ${s*.1})`}/>
       <text x={half} y={half+s*.06} textAnchor="middle"
-        fontFamily="'Barlow Condensed', sans-serif" fontWeight="900"
+        fontFamily="'Barlow Condensed',sans-serif" fontWeight="900"
         fontSize={s*.22} fill={color} letterSpacing={s*.01}>{abbr}</text>
     </svg>
   );
 }
 
 /* ─── Badge with fallback ─── */
-function BadgeImg({ club, size = 110 }) {
+function BadgeImg({ club, size=110 }) {
   const [failed, setFailed] = useState(false);
-  if (!club?.badgeUrl || failed) return <ClubBadgeFallback club={club} size={size} />;
+  if (!club?.badgeUrl || failed) return <ClubBadgeFallback club={club} size={size}/>;
   return (
     <img src={club.badgeUrl} alt={club.name}
-      style={{ width: size, height: size, objectFit: 'contain' }}
+      style={{ width:size, height:size, objectFit:'contain' }}
       onError={() => setFailed(true)}
     />
   );
 }
 
-/* ─── Bare arrow — no box, invisible until hover ─── */
-function ArrowBtn({ dir, onClick }) {
-  const [hovered, setHovered] = useState(false);
+/* ─── Arrow — invisible until parent card is focused/hovered ─── */
+function ArrowBtn({ dir, onClick, visible }) {
   return (
-    <button
-      onClick={onClick}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      style={{
-        background: 'none', border: 'none', padding: '8px',
-        cursor: 'pointer', flexShrink: 0,
-        color: hovered ? '#fff' : 'transparent',
-        transition: 'color 0.18s',
-        WebkitTapHighlightColor: 'transparent',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-      }}
-    >
+    <button onClick={onClick} style={{
+      background: 'none', border: 'none', padding: '8px',
+      cursor: 'pointer', flexShrink: 0,
+      color: visible ? 'rgba(255,255,255,0.85)' : 'transparent',
+      transition: 'color 0.18s',
+      WebkitTapHighlightColor: 'transparent',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      pointerEvents: visible ? 'all' : 'none',
+    }}>
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
-        stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+        stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
         {dir === 'left'
           ? <polyline points="15 18 9 12 15 6"/>
           : <polyline points="9 18 15 12 9 6"/>}
@@ -156,15 +162,32 @@ function ArrowBtn({ dir, onClick }) {
 function KitShirt({ color, accent, label }) {
   const c = color || '#333';
   const a = accent || '#fff';
+  const id = `sh-${label}`;
   return (
-    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:8 }}>
-      <svg width="72" height="72" viewBox="0 0 100 100">
-        <path d="M30 20 L10 40 L25 45 L25 85 L75 85 L75 45 L90 40 L70 20 L60 28 Q50 34 40 28 Z" fill={c} stroke="rgba(255,255,255,0.15)" strokeWidth="1.5"/>
-        <path d="M40 28 Q50 38 60 28" fill="none" stroke={a} strokeWidth="2"/>
-        <line x1="10" y1="40" x2="25" y2="45" stroke={a} strokeWidth="1" opacity="0.4"/>
-        <line x1="90" y1="40" x2="75" y2="45" stroke={a} strokeWidth="1" opacity="0.4"/>
+    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:10 }}>
+      <svg width="96" height="100" viewBox="0 0 200 210" fill="none">
+        <defs>
+          <filter id={id}>
+            <feDropShadow dx="0" dy="6" stdDeviation="8" floodColor="#000" floodOpacity="0.45"/>
+          </filter>
+          <linearGradient id={`g-${id}`} x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#fff" stopOpacity="0.1"/>
+            <stop offset="50%" stopColor="#fff" stopOpacity="0.03"/>
+            <stop offset="100%" stopColor="#000" stopOpacity="0.08"/>
+          </linearGradient>
+        </defs>
+        <path d="M 72 18 C 72 18 80 8 100 8 C 120 8 128 18 128 18 L 158 10 L 192 52 L 162 66 L 158 190 L 42 190 L 38 66 L 8 52 L 42 10 Z"
+          fill={c} stroke="rgba(255,255,255,0.12)" strokeWidth="1.5" strokeLinejoin="round" filter={`url(#${id})`}/>
+        <path d="M 72 18 C 72 18 80 8 100 8 C 120 8 128 18 128 18 L 158 10 L 192 52 L 162 66 L 158 190 L 42 190 L 38 66 L 8 52 L 42 10 Z"
+          fill={`url(#g-${id})`}/>
+        <path d="M 82 20 L 100 44 L 118 20" fill="none" stroke={a} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" opacity="0.9"/>
+        <line x1="72" y1="18" x2="42" y2="10" stroke={a} strokeWidth="1.5" opacity="0.2"/>
+        <line x1="128" y1="18" x2="158" y2="10" stroke={a} strokeWidth="1.5" opacity="0.2"/>
+        <path d="M 10 48 L 38 62" stroke={a} strokeWidth="4" strokeLinecap="round" opacity="0.35"/>
+        <path d="M 190 48 L 162 62" stroke={a} strokeWidth="4" strokeLinecap="round" opacity="0.35"/>
+        <path d="M 42 184 L 158 184" stroke={a} strokeWidth="3" strokeLinecap="round" opacity="0.2"/>
       </svg>
-      <span style={{ fontFamily:'var(--font-mono)', fontSize:10, color:'rgba(255,255,255,0.4)', textTransform:'uppercase', letterSpacing:1 }}>{label}</span>
+      <span style={{ fontFamily:'var(--font-mono)', fontSize:10, color:'rgba(255,255,255,0.5)', textTransform:'uppercase', letterSpacing:2, background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.1)', borderRadius:4, padding:'3px 10px' }}>{label}</span>
     </div>
   );
 }
@@ -179,99 +202,61 @@ function Section({ label, children }) {
   );
 }
 
-/* ─── Club Detail Modal ─── */
-function ClubDetailModal({ club, allPlayers, onConfirm, onBack }) {
-  const stats = getStats(club.name, allPlayers);
-  const color = club.color || '#4ade80';
-  return (
-    <div style={{ position:'fixed', inset:0, zIndex:700, background:'rgba(4,6,10,0.98)', backdropFilter:'blur(24px)', overflowY:'auto', animation:'detailIn 0.3s ease' }}>
-      <style>{`@keyframes detailIn { from { opacity:0; transform:translateY(20px) } to { opacity:1; transform:translateY(0) } }`}</style>
-      {club.badgeUrl && (
-        <div style={{ position:'fixed', inset:0, zIndex:0, backgroundImage:`url(${club.badgeUrl})`, backgroundSize:'55%', backgroundPosition:'center', backgroundRepeat:'no-repeat', opacity:0.04, pointerEvents:'none' }}/>
-      )}
-      <div style={{ position:'relative', zIndex:1, maxWidth:640, margin:'0 auto', padding:'clamp(24px,5vw,48px) clamp(20px,5vw,40px)' }}>
-        <button onClick={onBack} style={{ display:'flex', alignItems:'center', gap:8, background:'none', border:'none', color:'rgba(255,255,255,0.4)', fontFamily:'var(--font-mono)', fontSize:11, letterSpacing:2, textTransform:'uppercase', cursor:'pointer', padding:'8px 0', marginBottom:28, WebkitTapHighlightColor:'transparent' }}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-          Back
-        </button>
-        <div style={{ display:'flex', alignItems:'center', gap:20, marginBottom:36 }}>
-          <BadgeImg club={club} size={72}/>
-          <div>
-            <div style={{ fontFamily:'var(--font-mono)', fontSize:10, color:'rgba(255,255,255,0.3)', letterSpacing:3, textTransform:'uppercase', marginBottom:6 }}>{club.league}</div>
-            <div style={{ fontFamily:'var(--font-display)', fontWeight:900, fontSize:'clamp(22px,5vw,34px)', color:'#fff', letterSpacing:2, textTransform:'uppercase', lineHeight:1 }}>{club.name}</div>
-            <div style={{ fontFamily:'var(--font-mono)', fontSize:11, color, marginTop:6 }}>Est. {club.founded}</div>
-          </div>
-        </div>
-        <Section label="Club History">
-          <p style={{ fontSize:14, color:'rgba(255,255,255,0.6)', lineHeight:1.8, margin:0 }}>{club.history}</p>
-        </Section>
-        <Section label="Stadium">
-          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-            <div>
-              <div style={{ fontFamily:'var(--font-display)', fontSize:22, color:'#fff', letterSpacing:1 }}>{club.stadium}</div>
-              <div style={{ fontFamily:'var(--font-mono)', fontSize:11, color:'rgba(255,255,255,0.35)', marginTop:4 }}>Capacity: {club.capacity?.toLocaleString() || '—'}</div>
-            </div>
-            <div style={{ fontSize:36 }}>🏟</div>
-          </div>
-        </Section>
-        <Section label="Kits">
-          <div style={{ display:'flex', gap:36 }}>
-            <KitShirt color={club.kitHome} accent={club.kitAway} label="Home"/>
-            <KitShirt color={club.kitAway} accent={club.kitHome} label="Away"/>
-          </div>
-        </Section>
-        <Section label="Board Expectations">
-          <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-            {(club.expectations || []).map((exp, i) => (
-              <div key={i} style={{ display:'flex', alignItems:'flex-start', gap:12 }}>
-                <div style={{ width:22, height:22, borderRadius:4, flexShrink:0, background:`${color}22`, border:`1px solid ${color}55`, display:'flex', alignItems:'center', justifyContent:'center', fontFamily:'var(--font-mono)', fontSize:10, color }}>{i+1}</div>
-                <div style={{ fontSize:14, color:'rgba(255,255,255,0.7)', lineHeight:1.5, paddingTop:2 }}>{exp}</div>
-              </div>
-            ))}
-          </div>
-        </Section>
-        <Section label="Squad Strength">
-          <div style={{ display:'flex', background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.08)', borderRadius:10, overflow:'hidden' }}>
-            {[['ATT',stats.att],['MID',stats.mid],['DEF',stats.def],['OVR',stats.ovr]].map(([lbl,val],i,arr) => (
-              <div key={lbl} style={{ flex:1, textAlign:'center', padding:'14px 0', borderRight: i<arr.length-1 ? '1px solid rgba(255,255,255,0.07)' : 'none' }}>
-                <div style={{ fontFamily:'var(--font-display)', fontSize:26, color: lbl==='OVR' ? color : '#fff', lineHeight:1 }}>{val||'—'}</div>
-                <div style={{ fontFamily:'var(--font-mono)', fontSize:9, color:'rgba(255,255,255,0.35)', letterSpacing:2, textTransform:'uppercase', marginTop:4 }}>{lbl}</div>
-              </div>
-            ))}
-          </div>
-        </Section>
-        <Section label="Transfer Budget">
-          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-            <div style={{ fontFamily:'var(--font-display)', fontSize:36, color:'#4ade80', letterSpacing:1 }}>{fmt(club.budget)}</div>
-            <div style={{ fontFamily:'var(--font-mono)', fontSize:11, color:'rgba(255,255,255,0.3)', textAlign:'right', lineHeight:1.6 }}>Available for<br/>transfers</div>
-          </div>
-        </Section>
-        <button onClick={onConfirm} style={{ width:'100%', padding:'16px 0', marginTop:8, background:'#4ade80', color:'#000', border:'none', borderRadius:8, fontFamily:'var(--font-display)', fontSize:17, fontWeight:700, letterSpacing:3, textTransform:'uppercase', cursor:'pointer', boxShadow:'0 4px 24px rgba(74,222,128,0.3)', transition:'all 0.2s', WebkitTapHighlightColor:'transparent' }}
-          onMouseEnter={e => e.currentTarget.style.background='#2ecc71'}
-          onMouseLeave={e => e.currentTarget.style.background='#4ade80'}
-        >
-          Advance as Manager →
-        </button>
-      </div>
-    </div>
-  );
-}
+/* ════════════════════════════════════════════
+   UNIFIED MODAL — single mounted component,
+   phase controls which content is shown
+   phases: 'profile' | 'mode' | 'clubs' | 'detail'
+   ════════════════════════════════════════════ */
+const DAYS   = Array.from({length:31}, (_,i) => String(i+1).padStart(2,'0'));
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const YEARS  = Array.from({length:50}, (_,i) => String(2005-i));
 
-/* ─── MODAL 3: Club Selector ─── */
-function TeamSelectModal({ allClubs, allPlayers, onSelect, onBack }) {
-  const leagues     = useMemo(() => [...new Set((allClubs||[]).map(c=>c.league).filter(Boolean))],[allClubs]);
-  const [leagueIdx, setLeagueIdx]   = useState(0);
-  const [clubIdx, setClubIdx]       = useState(0);
-  const [cardKey, setCardKey]       = useState(0);
+function UnifiedModal({ isOpen, onClose, onComplete, allClubs, allPlayers }) {
+  const [phase, setPhase]             = useState('profile');
+  const [prevPhase, setPrevPhase]     = useState(null);
+  const [animDir, setAnimDir]         = useState('forward'); // 'forward' | 'back'
+  const [animKey, setAnimKey]         = useState(0);
+  const [managerData, setManagerData] = useState(null);
+
+  // Club selector state
+  const leagues     = useMemo(() => [...new Set((allClubs||[]).map(c=>c.league).filter(Boolean))], [allClubs]);
+  const [leagueIdx, setLeagueIdx] = useState(0);
+  const [clubIdx, setClubIdx]     = useState(0);
+  const [cardKey, setCardKey]     = useState(0);
   const [detailClub, setDetailClub] = useState(null);
 
+  // Card hover state for arrow visibility
+  const [countryHovered, setCountryHovered] = useState(false);
+  const [clubHovered, setClubHovered]       = useState(false);
+  const [leagueHovered, setLeagueHovered]   = useState(false);
+
+  // Profile form state
+  const [name, setName]   = useState('');
+  const [day, setDay]     = useState('01');
+  const [month, setMonth] = useState('Jan');
+  const [year, setYear]   = useState('1990');
+  const [err, setErr]     = useState('');
+
   const currentLeague = leagues[leagueIdx] || '';
-  const clubsInLeague = useMemo(() => (allClubs||[]).filter(c=>c.league===currentLeague),[allClubs,currentLeague]);
+  const clubsInLeague = useMemo(() => (allClubs||[]).filter(c=>c.league===currentLeague), [allClubs, currentLeague]);
   const currentClub   = clubsInLeague[clubIdx] || null;
   const country       = LEAGUE_COUNTRY[currentLeague] || { name: currentLeague, flag: '🌍' };
+  const leagueLogo    = LEAGUE_LOGO[currentLeague] || null;
   const color         = currentClub?.color || '#888';
   const stats         = currentClub ? getStats(currentClub.name, allPlayers) : { att:0,mid:0,def:0,ovr:0 };
   const stars         = getStars(stats.ovr);
+
+  // Reset to profile when modal opens
+  useEffect(() => {
+    if (isOpen) { setPhase('profile'); setAnimKey(k=>k+1); }
+  }, [isOpen]);
+
+  const goTo = (next, dir='forward') => {
+    setAnimDir(dir);
+    setPrevPhase(phase);
+    setPhase(next);
+    setAnimKey(k=>k+1);
+  };
 
   const prevLeague = () => { setLeagueIdx(i=>(i-1+leagues.length)%leagues.length); setClubIdx(0); setCardKey(k=>k+1); };
   const nextLeague = () => { setLeagueIdx(i=>(i+1)%leagues.length); setClubIdx(0); setCardKey(k=>k+1); };
@@ -279,255 +264,318 @@ function TeamSelectModal({ allClubs, allPlayers, onSelect, onBack }) {
   const nextClub   = () => { setClubIdx(i=>(i+1)%clubsInLeague.length); setCardKey(k=>k+1); };
 
   useEffect(() => {
+    if (!isOpen || phase !== 'clubs') return;
     const h = (e) => {
-      if (detailClub) return;
       if (e.key==='ArrowLeft')  prevClub();
       if (e.key==='ArrowRight') nextClub();
     };
     window.addEventListener('keydown', h);
     return () => window.removeEventListener('keydown', h);
-  }, [clubsInLeague.length, detailClub]);
+  }, [isOpen, phase, clubsInLeague.length]);
 
-  if (detailClub) {
-    return <ClubDetailModal club={detailClub} allPlayers={allPlayers} onConfirm={()=>onSelect(detailClub)} onBack={()=>setDetailClub(null)}/>;
-  }
+  if (!isOpen) return null;
 
-  return (
-    <div style={{ position:'fixed', inset:0, zIndex:600, background:'rgba(4,6,10,0.96)', backdropFilter:'blur(4px)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', animation:'tsIn 0.3s ease' }}>
-      <style>{`
-        @keyframes tsIn   { from{opacity:0} to{opacity:1} }
-        @keyframes cardIn { from{opacity:0;transform:scale(0.92) translateY(12px)} to{opacity:1;transform:scale(1) translateY(0)} }
-        @keyframes bgFade { from{opacity:0} to{opacity:0.07} }
-      `}</style>
+  /* ── Phase: Profile ── */
+  const renderProfile = () => (
+    <div key={`phase-${animKey}`} style={{ width:'100%', maxWidth:420, animation:`phaseIn 0.3s ease` }}>
+      <div style={{ fontFamily:'var(--font-mono)', fontSize:10, color:'rgba(255,255,255,0.3)', letterSpacing:3, textTransform:'uppercase', marginBottom:8 }}>Step 1 of 3</div>
+      <div style={{ fontFamily:'var(--font-display)', fontWeight:900, fontSize:'clamp(24px,6vw,38px)', color:'#fff', letterSpacing:2, textTransform:'uppercase', lineHeight:1, marginBottom:8 }}>Manager Profile</div>
+      <div style={{ fontFamily:'var(--font-body)', fontSize:14, color:'rgba(255,255,255,0.4)', marginBottom:36, lineHeight:1.6 }}>Tell us who's taking the hot seat.</div>
 
-      {/* Badge bg */}
-      {currentClub?.badgeUrl && (
-        <div key={`bg-${cardKey}`} style={{ position:'fixed', inset:0, zIndex:0, backgroundImage:`url(${currentClub.badgeUrl})`, backgroundSize:'55%', backgroundPosition:'center', backgroundRepeat:'no-repeat', animation:'bgFade 0.4s ease forwards', pointerEvents:'none' }}/>
-      )}
-      <div style={{ position:'fixed', inset:0, zIndex:1, pointerEvents:'none', background:`radial-gradient(ellipse at 50% 50%, ${color}14 0%, transparent 65%)`, transition:'background 0.4s' }}/>
-
-      {/* Back button */}
-      <button onClick={onBack} style={{ position:'fixed', top:20, left:20, zIndex:10, background:'none', border:'none', color:'rgba(255,255,255,0.4)', fontFamily:'var(--font-mono)', fontSize:11, letterSpacing:2, textTransform:'uppercase', cursor:'pointer', display:'flex', alignItems:'center', gap:8, WebkitTapHighlightColor:'transparent', padding:'8px 0' }}
-        onMouseEnter={e=>e.currentTarget.style.color='#fff'}
-        onMouseLeave={e=>e.currentTarget.style.color='rgba(255,255,255,0.4)'}
-      >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-        Back
-      </button>
-
-      {/* Sticky centered stack */}
-      <div style={{ position:'relative', zIndex:3, width:'100%', maxWidth:400, padding:'0 clamp(16px,4vw,32px)', display:'flex', flexDirection:'column', gap:10 }}>
-
-        {/* Country card */}
-        <div style={{ background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.1)', borderRadius:12, padding:'14px 4px', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-          <ArrowBtn dir="left" onClick={prevLeague}/>
-          <div style={{ textAlign:'center', flex:1 }}>
-            <div style={{ fontSize:26, lineHeight:1, marginBottom:5 }}>{country.flag}</div>
-            <div style={{ fontFamily:'var(--font-display)', fontSize:15, letterSpacing:3, textTransform:'uppercase', color:'#fff', lineHeight:1 }}>{country.name}</div>
-          </div>
-          <ArrowBtn dir="right" onClick={nextLeague}/>
-        </div>
-
-        {/* Club card */}
-        {currentClub ? (
-          <div key={cardKey} style={{ background:`linear-gradient(160deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.02) 100%)`, border:`1.5px solid ${color}55`, borderRadius:16, padding:'28px 48px', display:'flex', flexDirection:'column', alignItems:'center', gap:14, boxShadow:`0 0 60px ${color}20, 0 16px 48px rgba(0,0,0,0.5)`, animation:'cardIn 0.25s cubic-bezier(0.34,1.56,0.64,1)', position:'relative', overflow:'hidden' }}>
-            {/* Badge watermark */}
-            {currentClub.badgeUrl && (
-              <img src={currentClub.badgeUrl} alt="" style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'contain', opacity:0.08, pointerEvents:'none', padding:24 }} onError={e=>e.target.style.display='none'}/>
-            )}
-            {/* Side arrows */}
-            <div style={{ position:'absolute', left:4, top:'50%', transform:'translateY(-50%)', zIndex:2 }}>
-              <ArrowBtn dir="left" onClick={e=>{e.stopPropagation();prevClub();}}/>
-            </div>
-            <div style={{ position:'absolute', right:4, top:'50%', transform:'translateY(-50%)', zIndex:2 }}>
-              <ArrowBtn dir="right" onClick={e=>{e.stopPropagation();nextClub();}}/>
-            </div>
-            <div style={{ position:'relative', zIndex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:12, width:'100%' }}>
-              <div style={{ fontFamily:'var(--font-display)', fontWeight:900, fontSize:'clamp(16px,4vw,24px)', letterSpacing:2, textTransform:'uppercase', color:'#fff', textAlign:'center', lineHeight:1.1, textShadow:`0 0 30px ${color}60` }}>{currentClub.name}</div>
-              <Stars count={stars}/>
-              <div style={{ display:'flex', width:'100%', background:'rgba(0,0,0,0.3)', border:'1px solid rgba(255,255,255,0.08)', borderRadius:8, overflow:'hidden' }}>
-                {[['ATT',stats.att],['MID',stats.mid],['DEF',stats.def]].map(([lbl,val],i)=>(
-                  <div key={lbl} style={{ flex:1, textAlign:'center', padding:'10px 0', borderRight:i<2?'1px solid rgba(255,255,255,0.07)':'none' }}>
-                    <div style={{ fontFamily:'var(--font-display)', fontSize:22, color:'#fff', lineHeight:1 }}>{val||'—'}</div>
-                    <div style={{ fontFamily:'var(--font-mono)', fontSize:9, color:'rgba(255,255,255,0.35)', letterSpacing:2, textTransform:'uppercase', marginTop:3 }}>{lbl}</div>
-                  </div>
-                ))}
-              </div>
-              <div style={{ fontFamily:'var(--font-mono)', fontSize:10, color:'rgba(255,255,255,0.2)', letterSpacing:1 }}>{clubIdx+1} / {clubsInLeague.length}</div>
-            </div>
-          </div>
-        ) : (
-          <div style={{ textAlign:'center', color:'rgba(255,255,255,0.25)', fontFamily:'var(--font-mono)', fontSize:12, padding:40 }}>No clubs in this league</div>
-        )}
-
-        {/* League card — read only */}
-        <div style={{ background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.1)', borderRadius:12, padding:'12px 20px' }}>
-          <div style={{ fontFamily:'var(--font-mono)', fontSize:9, color:'rgba(255,255,255,0.3)', letterSpacing:2, textTransform:'uppercase', marginBottom:4 }}>League</div>
-          <div style={{ fontFamily:'var(--font-display)', fontSize:17, color:'#fff', letterSpacing:1 }}>{currentLeague}</div>
-        </div>
-
-        {/* Select button */}
-        {currentClub && (
-          <button onClick={()=>setDetailClub(currentClub)} style={{ width:'100%', padding:'14px 0', background:'#4ade80', color:'#000', border:'none', borderRadius:8, fontFamily:'var(--font-display)', fontSize:15, fontWeight:700, letterSpacing:3, textTransform:'uppercase', cursor:'pointer', boxShadow:'0 4px 20px rgba(74,222,128,0.25)', transition:'all 0.2s', WebkitTapHighlightColor:'transparent' }}
-            onMouseEnter={e=>e.currentTarget.style.background='#2ecc71'}
-            onMouseLeave={e=>e.currentTarget.style.background='#4ade80'}
-          >
-            Select Club
-          </button>
-        )}
+      <div style={{ marginBottom:24 }}>
+        <div style={{ fontFamily:'var(--font-mono)', fontSize:9, color:'rgba(255,255,255,0.3)', letterSpacing:3, textTransform:'uppercase', marginBottom:10 }}>Full Name</div>
+        <input className="mgr-input" placeholder="e.g. Alex Ferguson"
+          value={name} onChange={e=>{ setName(e.target.value); setErr(''); }}
+          onKeyDown={e=>e.key==='Enter' && handleProfileNext()}
+          maxLength={40}
+        />
       </div>
-    </div>
-  );
-}
-
-/* ─── MODAL 2: Career Mode ─── */
-function CareerModeModal({ onTakeCharge, onBuildFromScratch, onBack }) {
-  const [scratchHover, setScratchHover] = useState(false);
-
-  return (
-    <div style={{ position:'fixed', inset:0, zIndex:500, background:'rgba(4,6,10,0.97)', backdropFilter:'blur(8px)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', animation:'tsIn 0.3s ease', padding:'clamp(24px,6vw,48px) clamp(20px,5vw,40px)' }}>
-      <style>{`@keyframes tsIn { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }`}</style>
-
-      <button onClick={onBack} style={{ position:'fixed', top:20, left:20, background:'none', border:'none', color:'rgba(255,255,255,0.4)', fontFamily:'var(--font-mono)', fontSize:11, letterSpacing:2, textTransform:'uppercase', cursor:'pointer', display:'flex', alignItems:'center', gap:8, WebkitTapHighlightColor:'transparent' }}
-        onMouseEnter={e=>e.currentTarget.style.color='#fff'}
-        onMouseLeave={e=>e.currentTarget.style.color='rgba(255,255,255,0.4)'}
-      >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-        Back
-      </button>
-
-      <div style={{ width:'100%', maxWidth:480 }}>
-        <div style={{ fontFamily:'var(--font-mono)', fontSize:10, color:'rgba(255,255,255,0.3)', letterSpacing:3, textTransform:'uppercase', marginBottom:8 }}>Step 2 of 3</div>
-        <div style={{ fontFamily:'var(--font-display)', fontWeight:900, fontSize:'clamp(24px,6vw,38px)', color:'#fff', letterSpacing:2, textTransform:'uppercase', lineHeight:1, marginBottom:8 }}>Choose Your Path</div>
-        <div style={{ fontFamily:'var(--font-body)', fontSize:14, color:'rgba(255,255,255,0.4)', marginBottom:36, lineHeight:1.6 }}>How do you want to start your managerial career?</div>
-
-        <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
-
-          {/* Take Charge */}
-          <button onClick={onTakeCharge} style={{ background:'rgba(255,255,255,0.05)', border:'1.5px solid rgba(0,232,122,0.4)', borderRadius:14, padding:'24px 28px', textAlign:'left', cursor:'pointer', transition:'all 0.2s', WebkitTapHighlightColor:'transparent', width:'100%' }}
-            onMouseEnter={e=>{ e.currentTarget.style.background='rgba(0,232,122,0.08)'; e.currentTarget.style.borderColor='rgba(0,232,122,0.7)'; }}
-            onMouseLeave={e=>{ e.currentTarget.style.background='rgba(255,255,255,0.05)'; e.currentTarget.style.borderColor='rgba(0,232,122,0.4)'; }}
-          >
-            <div style={{ display:'flex', alignItems:'center', gap:14, marginBottom:10 }}>
-              <div style={{ width:40, height:40, borderRadius:10, background:'rgba(0,232,122,0.15)', border:'1px solid rgba(0,232,122,0.3)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#00e87a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-                </svg>
-              </div>
-              <div style={{ fontFamily:'var(--font-display)', fontWeight:900, fontSize:20, color:'#fff', letterSpacing:2, textTransform:'uppercase' }}>Take Charge</div>
-            </div>
-            <div style={{ fontFamily:'var(--font-body)', fontSize:13, color:'rgba(255,255,255,0.5)', lineHeight:1.7 }}>Step into the dugout of an existing professional club. Choose your squad, set your tactics, and chase glory from day one.</div>
-          </button>
-
-          {/* Build From Scratch */}
-          <button
-            onClick={onBuildFromScratch}
-            onMouseEnter={()=>setScratchHover(true)}
-            onMouseLeave={()=>setScratchHover(false)}
-            style={{ background:'rgba(255,255,255,0.03)', border:'1.5px solid rgba(255,255,255,0.1)', borderRadius:14, padding:'24px 28px', textAlign:'left', cursor:'not-allowed', transition:'all 0.2s', WebkitTapHighlightColor:'transparent', width:'100%', position:'relative', overflow:'hidden' }}
-          >
-            {/* Coming Soon overlay */}
-            <div style={{ position:'absolute', top:12, right:14, fontFamily:'var(--font-mono)', fontSize:9, letterSpacing:2, color:'rgba(255,255,255,0.25)', textTransform:'uppercase', background:'rgba(255,255,255,0.06)', border:'1px solid rgba(255,255,255,0.1)', borderRadius:4, padding:'3px 8px' }}>Coming Soon</div>
-            <div style={{ display:'flex', alignItems:'center', gap:14, marginBottom:10 }}>
-              <div style={{ width:40, height:40, borderRadius:10, background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.1)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.3)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-                </svg>
-              </div>
-              <div style={{ fontFamily:'var(--font-display)', fontWeight:900, fontSize:20, color:'rgba(255,255,255,0.3)', letterSpacing:2, textTransform:'uppercase' }}>Build From Scratch</div>
-            </div>
-            <div style={{ fontFamily:'var(--font-body)', fontSize:13, color:'rgba(255,255,255,0.25)', lineHeight:1.7 }}>Create your own club from the ground up. Name it, design it, register it in Division 3, and grind your way to the top.</div>
-          </button>
-
+      <div style={{ marginBottom:32 }}>
+        <div style={{ fontFamily:'var(--font-mono)', fontSize:9, color:'rgba(255,255,255,0.3)', letterSpacing:3, textTransform:'uppercase', marginBottom:10 }}>Date of Birth</div>
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1.4fr 1.2fr', gap:10 }}>
+          <select className="mgr-select" value={day} onChange={e=>setDay(e.target.value)}>
+            {DAYS.map(d=><option key={d}>{d}</option>)}
+          </select>
+          <select className="mgr-select" value={month} onChange={e=>setMonth(e.target.value)}>
+            {MONTHS.map(m=><option key={m}>{m}</option>)}
+          </select>
+          <select className="mgr-select" value={year} onChange={e=>setYear(e.target.value)}>
+            {YEARS.map(y=><option key={y}>{y}</option>)}
+          </select>
         </div>
       </div>
+      {err && <div style={{ fontFamily:'var(--font-mono)', fontSize:11, color:'#ff3b5c', letterSpacing:1, marginBottom:16 }}>{err}</div>}
+      <button onClick={handleProfileNext} className="mgr-btn-primary">Continue →</button>
     </div>
   );
-}
 
-/* ─── MODAL 1: Manager Profile ─── */
-const DAYS   = Array.from({length:31},(_,i)=>String(i+1).padStart(2,'0'));
-const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-const YEARS  = Array.from({length:50},(_,i)=>String(2005-i));
-
-function ManagerProfileModal({ onNext, onClose }) {
-  const [name, setName]   = useState('');
-  const [day, setDay]     = useState('01');
-  const [month, setMonth] = useState('Jan');
-  const [year, setYear]   = useState('1990');
-  const [err, setErr]     = useState('');
-
-  const handleNext = () => {
+  const handleProfileNext = () => {
     if (!name.trim()) { setErr('Enter your manager name.'); return; }
     if (name.trim().length < 2) { setErr('Name must be at least 2 characters.'); return; }
     setErr('');
-    onNext({ name: name.trim(), dob: `${day} ${month} ${year}` });
+    setManagerData({ name: name.trim(), dob: `${day} ${month} ${year}` });
+    goTo('mode');
+  };
+
+  /* ── Phase: Career Mode ── */
+  const renderMode = () => (
+    <div key={`phase-${animKey}`} style={{ width:'100%', maxWidth:480, animation:'phaseIn 0.3s ease' }}>
+      <div style={{ fontFamily:'var(--font-mono)', fontSize:10, color:'rgba(255,255,255,0.3)', letterSpacing:3, textTransform:'uppercase', marginBottom:8 }}>Step 2 of 3</div>
+      <div style={{ fontFamily:'var(--font-display)', fontWeight:900, fontSize:'clamp(24px,6vw,38px)', color:'#fff', letterSpacing:2, textTransform:'uppercase', lineHeight:1, marginBottom:8 }}>Choose Your Path</div>
+      <div style={{ fontFamily:'var(--font-body)', fontSize:14, color:'rgba(255,255,255,0.4)', marginBottom:36, lineHeight:1.6 }}>How do you want to start your managerial career?</div>
+      <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+        <button onClick={()=>goTo('clubs')} className="mgr-mode-btn mgr-mode-btn-active">
+          <div style={{ display:'flex', alignItems:'center', gap:14, marginBottom:10 }}>
+            <div style={{ width:40, height:40, borderRadius:10, background:'rgba(0,232,122,0.15)', border:'1px solid rgba(0,232,122,0.3)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#00e87a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+              </svg>
+            </div>
+            <div style={{ fontFamily:'var(--font-display)', fontWeight:900, fontSize:20, color:'#fff', letterSpacing:2, textTransform:'uppercase' }}>Take Charge</div>
+          </div>
+          <div style={{ fontFamily:'var(--font-body)', fontSize:13, color:'rgba(255,255,255,0.5)', lineHeight:1.7, textAlign:'left' }}>Step into the dugout of an existing professional club. Choose your squad, set your tactics, and chase glory from day one.</div>
+        </button>
+
+        <button className="mgr-mode-btn mgr-mode-btn-disabled" style={{ cursor:'not-allowed', position:'relative', overflow:'hidden' }}>
+          <div style={{ position:'absolute', top:12, right:14, fontFamily:'var(--font-mono)', fontSize:9, letterSpacing:2, color:'rgba(255,255,255,0.25)', textTransform:'uppercase', background:'rgba(255,255,255,0.06)', border:'1px solid rgba(255,255,255,0.1)', borderRadius:4, padding:'3px 8px' }}>Coming Soon</div>
+          <div style={{ display:'flex', alignItems:'center', gap:14, marginBottom:10 }}>
+            <div style={{ width:40, height:40, borderRadius:10, background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.1)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.3)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+              </svg>
+            </div>
+            <div style={{ fontFamily:'var(--font-display)', fontWeight:900, fontSize:20, color:'rgba(255,255,255,0.3)', letterSpacing:2, textTransform:'uppercase' }}>Build From Scratch</div>
+          </div>
+          <div style={{ fontFamily:'var(--font-body)', fontSize:13, color:'rgba(255,255,255,0.25)', lineHeight:1.7, textAlign:'left' }}>Create your own club from the ground up. Name it, design it, register it in Division 3, and grind your way to the top.</div>
+        </button>
+      </div>
+    </div>
+  );
+
+  /* ── Phase: Club Selector ── */
+  const renderClubs = () => (
+    <div key={`phase-${animKey}`} style={{ width:'100%', maxWidth:400, animation:'phaseIn 0.3s ease', display:'flex', flexDirection:'column', gap:12 }}>
+
+      {/* Step indicator */}
+      <div style={{ fontFamily:'var(--font-mono)', fontSize:10, color:'rgba(255,255,255,0.3)', letterSpacing:3, textTransform:'uppercase', marginBottom:4 }}>Step 3 of 3</div>
+
+      {/* Country card */}
+      <div
+        style={{ background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.1)', borderRadius:12, padding:'14px 4px', display:'flex', alignItems:'center', justifyContent:'space-between', cursor:'default' }}
+        onMouseEnter={()=>setCountryHovered(true)}
+        onMouseLeave={()=>setCountryHovered(false)}
+        onTouchStart={()=>setCountryHovered(true)}
+        onTouchEnd={()=>setTimeout(()=>setCountryHovered(false),1200)}
+      >
+        <ArrowBtn dir="left" onClick={prevLeague} visible={countryHovered}/>
+        <div style={{ textAlign:'center', flex:1 }}>
+          <div style={{ fontSize:26, lineHeight:1, marginBottom:5 }}>{country.flag}</div>
+          <div style={{ fontFamily:'var(--font-display)', fontSize:15, letterSpacing:3, textTransform:'uppercase', color:'#fff', lineHeight:1 }}>{country.name}</div>
+        </div>
+        <ArrowBtn dir="right" onClick={nextLeague} visible={countryHovered}/>
+      </div>
+
+      {/* Club card */}
+      {currentClub ? (
+        <div key={cardKey}
+          style={{ background:`linear-gradient(160deg, rgba(255,255,255,0.07) 0%, rgba(255,255,255,0.02) 100%)`, border:`1.5px solid ${color}55`, borderRadius:16, padding:'28px 52px', display:'flex', flexDirection:'column', alignItems:'center', gap:14, boxShadow:`0 0 60px ${color}20, 0 16px 48px rgba(0,0,0,0.5)`, animation:'cardIn 0.25s cubic-bezier(0.34,1.56,0.64,1)', position:'relative', overflow:'hidden' }}
+          onMouseEnter={()=>setClubHovered(true)}
+          onMouseLeave={()=>setClubHovered(false)}
+          onTouchStart={()=>setClubHovered(true)}
+          onTouchEnd={()=>setTimeout(()=>setClubHovered(false),1200)}
+        >
+          {/* Badge watermark background */}
+          {currentClub.badgeUrl && (
+            <img src={currentClub.badgeUrl} alt="" style={{ position:'absolute', inset:0, width:'100%', height:'100%', objectFit:'contain', opacity:0.08, pointerEvents:'none', padding:24 }} onError={e=>e.target.style.display='none'}/>
+          )}
+
+          {/* Side arrows — visible on hover/touch */}
+          <div style={{ position:'absolute', left:6, top:'50%', transform:'translateY(-50%)', zIndex:2 }}>
+            <ArrowBtn dir="left" onClick={e=>{e.stopPropagation();prevClub();}} visible={clubHovered}/>
+          </div>
+          <div style={{ position:'absolute', right:6, top:'50%', transform:'translateY(-50%)', zIndex:2 }}>
+            <ArrowBtn dir="right" onClick={e=>{e.stopPropagation();nextClub();}} visible={clubHovered}/>
+          </div>
+
+          <div style={{ position:'relative', zIndex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:12, width:'100%' }}>
+            {/* Club name */}
+            <div style={{ fontFamily:'var(--font-display)', fontWeight:900, fontSize:'clamp(16px,4vw,24px)', letterSpacing:2, textTransform:'uppercase', color:'#fff', textAlign:'center', lineHeight:1.1, textShadow:`0 0 30px ${color}60` }}>{currentClub.name}</div>
+            {/* Badge — centered hero */}
+            <BadgeImg club={currentClub} size={110}/>
+            {/* Stars */}
+            <Stars count={stars}/>
+          </div>
+        </div>
+      ) : (
+        <div style={{ textAlign:'center', color:'rgba(255,255,255,0.25)', fontFamily:'var(--font-mono)', fontSize:12, padding:40 }}>No clubs in this league</div>
+      )}
+
+      {/* League card */}
+      <div
+        style={{ background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.1)', borderRadius:12, padding:'14px 16px', display:'flex', flexDirection:'column', alignItems:'center', gap:8 }}
+        onMouseEnter={()=>setLeagueHovered(true)}
+        onMouseLeave={()=>setLeagueHovered(false)}
+        onTouchStart={()=>setLeagueHovered(true)}
+        onTouchEnd={()=>setTimeout(()=>setLeagueHovered(false),1200)}
+      >
+        <div style={{ width:'100%', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+          <ArrowBtn dir="left" onClick={prevLeague} visible={leagueHovered}/>
+          <div style={{ textAlign:'center', flex:1 }}>
+            <div style={{ fontFamily:'var(--font-mono)', fontSize:9, color:'rgba(255,255,255,0.3)', letterSpacing:2, textTransform:'uppercase', marginBottom:4 }}>League</div>
+            <div style={{ fontFamily:'var(--font-display)', fontSize:17, color:'#fff', letterSpacing:1 }}>{currentLeague}</div>
+            {leagueLogo && (
+              <img src={leagueLogo} alt={currentLeague}
+                style={{ height:24, width:'auto', objectFit:'contain', margin:'6px auto 0', display:'block', opacity:0.8 }}
+                onError={e=>e.target.style.display='none'}
+              />
+            )}
+          </div>
+          <ArrowBtn dir="right" onClick={nextLeague} visible={leagueHovered}/>
+        </div>
+      </div>
+
+      {/* Select button */}
+      {currentClub && (
+        <button onClick={()=>{ setDetailClub(currentClub); setPhase('detail'); setAnimKey(k=>k+1); }} className="mgr-btn-primary">
+          Select Club
+        </button>
+      )}
+    </div>
+  );
+
+  /* ── Phase: Club Detail ── */
+  const renderDetail = () => {
+    if (!detailClub) return null;
+    const dColor = detailClub.color || '#4ade80';
+    const dStats = getStats(detailClub.name, allPlayers);
+    return (
+      <div key={`phase-${animKey}`} style={{ width:'100%', maxWidth:640, animation:'phaseIn 0.3s ease', overflowY:'auto', maxHeight:'85vh', paddingRight:4 }}>
+
+        {/* Sticky badge bg — fixed inside modal */}
+        {detailClub.badgeUrl && (
+          <div style={{ position:'fixed', inset:0, zIndex:0, backgroundImage:`url(${detailClub.badgeUrl})`, backgroundSize:'52%', backgroundPosition:'center', backgroundRepeat:'no-repeat', opacity:0.05, pointerEvents:'none' }}/>
+        )}
+        <div style={{ position:'fixed', inset:0, zIndex:0, pointerEvents:'none', background:`radial-gradient(ellipse at 50% 40%, ${dColor}0d 0%, transparent 60%)` }}/>
+
+        <div style={{ position:'relative', zIndex:1 }}>
+          {/* Club header */}
+          <div style={{ display:'flex', alignItems:'center', gap:20, marginBottom:36 }}>
+            <BadgeImg club={detailClub} size={72}/>
+            <div>
+              <div style={{ fontFamily:'var(--font-mono)', fontSize:10, color:'rgba(255,255,255,0.3)', letterSpacing:3, textTransform:'uppercase', marginBottom:6 }}>{detailClub.league}</div>
+              <div style={{ fontFamily:'var(--font-display)', fontWeight:900, fontSize:'clamp(22px,5vw,34px)', color:'#fff', letterSpacing:2, textTransform:'uppercase', lineHeight:1 }}>{detailClub.name}</div>
+              <div style={{ fontFamily:'var(--font-mono)', fontSize:11, color:dColor, marginTop:6 }}>Est. {detailClub.founded}</div>
+            </div>
+          </div>
+
+          <Section label="Club History">
+            <p style={{ fontSize:14, color:'rgba(255,255,255,0.6)', lineHeight:1.8, margin:0 }}>{detailClub.history}</p>
+          </Section>
+
+          <Section label="Stadium">
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', background:'rgba(255,255,255,0.03)', border:'1px solid rgba(255,255,255,0.07)', borderRadius:10, padding:'16px 20px' }}>
+              <div>
+                <div style={{ fontFamily:'var(--font-display)', fontSize:22, color:'#fff', letterSpacing:1 }}>{detailClub.stadium}</div>
+                <div style={{ fontFamily:'var(--font-mono)', fontSize:11, color:'rgba(255,255,255,0.35)', marginTop:4 }}>Capacity: {detailClub.capacity?.toLocaleString() || '—'}</div>
+              </div>
+              <div style={{ fontSize:36 }}>🏟️</div>
+            </div>
+          </Section>
+
+          <Section label="Kits">
+            <div style={{ display:'flex', gap:28, justifyContent:'center' }}>
+              <KitShirt color={detailClub.kitHome} accent={detailClub.kitAway} label="Home"/>
+              <KitShirt color={detailClub.kitAway} accent={detailClub.kitHome} label="Away"/>
+            </div>
+          </Section>
+
+          <Section label="Board Expectations">
+            <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+              {(detailClub.expectations||[]).map((exp,i) => (
+                <div key={i} style={{ display:'flex', alignItems:'flex-start', gap:12, background:'rgba(255,255,255,0.03)', border:'1px solid rgba(255,255,255,0.06)', borderRadius:8, padding:'12px 14px' }}>
+                  <div style={{ width:22, height:22, borderRadius:4, flexShrink:0, background:`${dColor}22`, border:`1px solid ${dColor}55`, display:'flex', alignItems:'center', justifyContent:'center', fontFamily:'var(--font-mono)', fontSize:10, color:dColor }}>{i+1}</div>
+                  <div style={{ fontSize:14, color:'rgba(255,255,255,0.7)', lineHeight:1.5, paddingTop:2 }}>{exp}</div>
+                </div>
+              ))}
+            </div>
+          </Section>
+
+          <Section label="Squad Strength">
+            <div style={{ display:'flex', background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.08)', borderRadius:10, overflow:'hidden' }}>
+              {[['ATT',dStats.att],['MID',dStats.mid],['DEF',dStats.def],['OVR',dStats.ovr]].map(([lbl,val],i,arr) => (
+                <div key={lbl} style={{ flex:1, textAlign:'center', padding:'14px 0', borderRight:i<arr.length-1?'1px solid rgba(255,255,255,0.07)':'none' }}>
+                  <div style={{ fontFamily:'var(--font-display)', fontSize:26, color:lbl==='OVR'?dColor:'#fff', lineHeight:1 }}>{val||'—'}</div>
+                  <div style={{ fontFamily:'var(--font-mono)', fontSize:9, color:'rgba(255,255,255,0.35)', letterSpacing:2, textTransform:'uppercase', marginTop:4 }}>{lbl}</div>
+                </div>
+              ))}
+            </div>
+          </Section>
+
+          <Section label="Transfer Budget">
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', background:'rgba(74,222,128,0.05)', border:'1px solid rgba(74,222,128,0.15)', borderRadius:10, padding:'16px 20px' }}>
+              <div style={{ fontFamily:'var(--font-display)', fontSize:36, color:'#4ade80', letterSpacing:1 }}>{fmt(detailClub.budget)}</div>
+              <div style={{ fontFamily:'var(--font-mono)', fontSize:11, color:'rgba(255,255,255,0.3)', textAlign:'right', lineHeight:1.6 }}>Available for<br/>transfers</div>
+            </div>
+          </Section>
+
+          <button onClick={()=>onComplete(detailClub, managerData)} className="mgr-btn-primary" style={{ marginTop:8 }}>
+            Advance as Manager →
+          </button>
+          <div style={{ height:32 }}/>
+        </div>
+      </div>
+    );
+  };
+
+  /* ── Nav helpers ── */
+  const canGoBack = phase !== 'profile';
+  const handleBack = () => {
+    if (phase === 'mode')   goTo('profile', 'back');
+    if (phase === 'clubs')  goTo('mode', 'back');
+    if (phase === 'detail') { setDetailClub(null); goTo('clubs', 'back'); }
   };
 
   return (
-    <div style={{ position:'fixed', inset:0, zIndex:500, background:'rgba(4,6,10,0.97)', backdropFilter:'blur(8px)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', animation:'profileIn 0.3s ease', padding:'clamp(24px,6vw,48px) clamp(20px,5vw,40px)' }}>
-      <style>{`
-        @keyframes profileIn { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
-        .mgr-input { background:rgba(255,255,255,0.06); border:1.5px solid rgba(255,255,255,0.12); border-radius:8px; padding:14px 16px; color:#fff; font-family:'Barlow',sans-serif; font-size:15px; width:100%; outline:none; transition:border-color 0.2s; box-sizing:border-box; }
-        .mgr-input:focus { border-color:rgba(0,232,122,0.6); }
-        .mgr-input::placeholder { color:rgba(255,255,255,0.2); }
-        .mgr-select { background:rgba(255,255,255,0.06); border:1.5px solid rgba(255,255,255,0.12); border-radius:8px; padding:12px 10px; color:#fff; font-family:'Barlow Condensed',sans-serif; font-size:15px; outline:none; cursor:pointer; transition:border-color 0.2s; appearance:none; -webkit-appearance:none; text-align:center; }
-        .mgr-select:focus { border-color:rgba(0,232,122,0.6); }
-        .mgr-select option { background:#0f1318; }
-      `}</style>
+    <div style={{ position:'fixed', inset:0, zIndex:500 }}>
+      {/* ── Backdrop ── */}
+      <div style={{ position:'absolute', inset:0, background:'rgba(4,6,10,0.97)', backdropFilter:'blur(10px)' }}/>
 
-      <button onClick={onClose} style={{ position:'fixed', top:20, right:20, background:'none', border:'none', color:'rgba(255,255,255,0.35)', cursor:'pointer', display:'flex', alignItems:'center', gap:6, fontFamily:'var(--font-mono)', fontSize:11, letterSpacing:2, textTransform:'uppercase', WebkitTapHighlightColor:'transparent' }}
-        onMouseEnter={e=>e.currentTarget.style.color='#fff'}
-        onMouseLeave={e=>e.currentTarget.style.color='rgba(255,255,255,0.35)'}
-      >
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-        Close
-      </button>
+      {/* ── Club badge full-bg (clubs + detail phases) ── */}
+      {(phase==='clubs' || phase==='detail') && currentClub?.badgeUrl && (
+        <div key={`modal-bg-${cardKey}`} style={{ position:'absolute', inset:0, backgroundImage:`url(${currentClub.badgeUrl})`, backgroundSize:'55%', backgroundPosition:'center', backgroundRepeat:'no-repeat', opacity:0, animation:'bgFade 0.4s ease forwards', pointerEvents:'none' }}/>
+      )}
+      {(phase==='clubs' || phase==='detail') && (
+        <div style={{ position:'absolute', inset:0, pointerEvents:'none', background:`radial-gradient(ellipse at 50% 50%, ${color}12 0%, transparent 65%)`, transition:'background 0.4s' }}/>
+      )}
 
-      <div style={{ width:'100%', maxWidth:420 }}>
-        <div style={{ fontFamily:'var(--font-mono)', fontSize:10, color:'rgba(255,255,255,0.3)', letterSpacing:3, textTransform:'uppercase', marginBottom:8 }}>Step 1 of 3</div>
-        <div style={{ fontFamily:'var(--font-display)', fontWeight:900, fontSize:'clamp(24px,6vw,38px)', color:'#fff', letterSpacing:2, textTransform:'uppercase', lineHeight:1, marginBottom:8 }}>Manager Profile</div>
-        <div style={{ fontFamily:'var(--font-body)', fontSize:14, color:'rgba(255,255,255,0.4)', marginBottom:36, lineHeight:1.6 }}>Tell us who's taking the hot seat.</div>
+      {/* ── Top bar: back + close ── */}
+      <div style={{ position:'absolute', top:0, left:0, right:0, zIndex:10, display:'flex', alignItems:'center', justifyContent:'space-between', padding:'18px 20px' }}>
+        {canGoBack ? (
+          <button onClick={handleBack} style={{ background:'none', border:'none', color:'rgba(255,255,255,0.4)', fontFamily:'var(--font-mono)', fontSize:11, letterSpacing:2, textTransform:'uppercase', cursor:'pointer', display:'flex', alignItems:'center', gap:8, WebkitTapHighlightColor:'transparent' }}
+            onMouseEnter={e=>e.currentTarget.style.color='#fff'}
+            onMouseLeave={e=>e.currentTarget.style.color='rgba(255,255,255,0.4)'}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+            Back
+          </button>
+        ) : <div/>}
 
-        {/* Name */}
-        <div style={{ marginBottom:24 }}>
-          <div style={{ fontFamily:'var(--font-mono)', fontSize:9, color:'rgba(255,255,255,0.3)', letterSpacing:3, textTransform:'uppercase', marginBottom:10 }}>Full Name</div>
-          <input
-            className="mgr-input"
-            placeholder="e.g. Alex Ferguson"
-            value={name}
-            onChange={e=>{ setName(e.target.value); setErr(''); }}
-            onKeyDown={e=>e.key==='Enter' && handleNext()}
-            maxLength={40}
-          />
-        </div>
-
-        {/* DOB */}
-        <div style={{ marginBottom:32 }}>
-          <div style={{ fontFamily:'var(--font-mono)', fontSize:9, color:'rgba(255,255,255,0.3)', letterSpacing:3, textTransform:'uppercase', marginBottom:10 }}>Date of Birth</div>
-          <div style={{ display:'grid', gridTemplateColumns:'1fr 1.4fr 1.2fr', gap:10 }}>
-            <select className="mgr-select" value={day} onChange={e=>setDay(e.target.value)}>
-              {DAYS.map(d=><option key={d}>{d}</option>)}
-            </select>
-            <select className="mgr-select" value={month} onChange={e=>setMonth(e.target.value)}>
-              {MONTHS.map(m=><option key={m}>{m}</option>)}
-            </select>
-            <select className="mgr-select" value={year} onChange={e=>setYear(e.target.value)}>
-              {YEARS.map(y=><option key={y}>{y}</option>)}
-            </select>
-          </div>
-        </div>
-
-        {err && (
-          <div style={{ fontFamily:'var(--font-mono)', fontSize:11, color:'#ff3b5c', letterSpacing:1, marginBottom:16 }}>{err}</div>
-        )}
-
-        <button onClick={handleNext} style={{ width:'100%', padding:'14px 0', background:'#4ade80', color:'#000', border:'none', borderRadius:8, fontFamily:'var(--font-display)', fontSize:15, fontWeight:700, letterSpacing:3, textTransform:'uppercase', cursor:'pointer', boxShadow:'0 4px 20px rgba(74,222,128,0.25)', transition:'all 0.2s', WebkitTapHighlightColor:'transparent' }}
-          onMouseEnter={e=>e.currentTarget.style.background='#2ecc71'}
-          onMouseLeave={e=>e.currentTarget.style.background='#4ade80'}
+        <button onClick={onClose} style={{ background:'none', border:'none', color:'rgba(255,255,255,0.35)', cursor:'pointer', display:'flex', alignItems:'center', gap:6, fontFamily:'var(--font-mono)', fontSize:11, letterSpacing:2, textTransform:'uppercase', WebkitTapHighlightColor:'transparent' }}
+          onMouseEnter={e=>e.currentTarget.style.color='#fff'}
+          onMouseLeave={e=>e.currentTarget.style.color='rgba(255,255,255,0.35)'}
         >
-          Continue →
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          Close
         </button>
+      </div>
+
+      {/* ── Phase content ── */}
+      <div style={{ position:'relative', zIndex:5, width:'100%', height:'100%', display:'flex', flexDirection:'column', alignItems:'center', justifyContent: phase==='detail' ? 'flex-start' : 'center', padding: phase==='detail' ? 'clamp(70px,12vw,90px) clamp(20px,5vw,40px) 0' : 'clamp(60px,10vw,80px) clamp(16px,4vw,32px)', overflowY: phase==='detail' ? 'auto' : 'hidden' }}>
+        {phase === 'profile' && renderProfile()}
+        {phase === 'mode'    && renderMode()}
+        {phase === 'clubs'   && renderClubs()}
+        {phase === 'detail'  && renderDetail()}
       </div>
     </div>
   );
@@ -539,14 +587,10 @@ export default function Home() {
   const navigate = useNavigate();
 
   const [slide, setSlide]                   = useState(0);
-  const [kenBurnsKey, setKenBurnsKey]       = useState(0);
   const [loaded, setLoaded]                 = useState(false);
   const [loaderProgress, setLoaderProgress] = useState(0);
   const [loaderDone, setLoaderDone]         = useState(false);
-
-  // Modal flow: null | 'profile' | 'mode' | 'clubs'
-  const [modal, setModal] = useState(null);
-  const [managerData, setManagerData] = useState(null);
+  const [modalOpen, setModalOpen]           = useState(false);
 
   /* Loader */
   useEffect(() => {
@@ -564,37 +608,23 @@ export default function Home() {
     return () => clearInterval(interval);
   }, []);
 
-  /* Slideshow + Ken Burns cycle */
+  /* Slideshow */
   useEffect(() => {
     if (!loaded) return;
-    const t = setInterval(() => {
-      setSlide(s => (s + 1) % SLIDES.length);
-      setKenBurnsKey(k => k + 1);
-    }, 6000);
+    const t = setInterval(() => setSlide(s => (s+1) % SLIDES.length), 6000);
     return () => clearInterval(t);
   }, [loaded]);
 
-  /* Body scroll lock when modal open */
+  /* Body scroll lock */
   useEffect(() => {
-    document.body.style.overflow = modal ? 'hidden' : '';
+    document.body.style.overflow = modalOpen ? 'hidden' : '';
     return () => { document.body.style.overflow = ''; };
-  }, [modal]);
+  }, [modalOpen]);
 
-  const handleProfileNext = (data) => {
-    setManagerData(data);
-    setModal('mode');
-  };
-
-  const handleTakeCharge = () => setModal('clubs');
-
-  const handleBuildFromScratch = () => {
-    // Placeholder — coming soon, do nothing
-  };
-
-  const handleSelect = (club) => {
+  const handleComplete = (club, managerData) => {
     chooseClub(club);
     if (setManagerProfile && managerData) setManagerProfile(managerData);
-    setModal(null);
+    setModalOpen(false);
     navigate('/home');
   };
 
@@ -603,20 +633,67 @@ export default function Home() {
       <style>{`
         @keyframes slideUp  { from{opacity:0;transform:translateY(36px)} to{opacity:1;transform:translateY(0)} }
         @keyframes fadeIn   { from{opacity:0} to{opacity:1} }
-        @keyframes kbZoom   { from{transform:scale(1) translate(0,0)} to{transform:scale(1.12) translate(-2%,-1%)} }
-        @keyframes kbZoom2  { from{transform:scale(1) translate(0,0)} to{transform:scale(1.10) translate(2%, 1%)} }
-        @keyframes kbZoom3  { from{transform:scale(1.05) translate(-1%,0)} to{transform:scale(1.14) translate(1%,-2%)} }
-        .ts-slide-bg { position:absolute; inset:0; background-size:cover; opacity:0; transition:opacity 1.8s ease; }
+        @keyframes phaseIn  { from{opacity:0;transform:translateY(14px)} to{opacity:1;transform:translateY(0)} }
+        @keyframes bgFade   { from{opacity:0} to{opacity:0.07} }
+        @keyframes cardIn   { from{opacity:0;transform:scale(0.92) translateY(12px)} to{opacity:1;transform:scale(1) translateY(0)} }
+
+        /* Ken Burns motion variants */
+        @keyframes kb-zoom-in   { from{transform:scale(1) translate(0,0)}       to{transform:scale(1.12) translate(-1.5%,-1%)} }
+        @keyframes kb-zoom-out  { from{transform:scale(1.12) translate(0,0)}    to{transform:scale(1) translate(1%,0.5%)} }
+        @keyframes kb-pan-right { from{transform:scale(1.08) translate(-3%,0)}  to{transform:scale(1.08) translate(0%,0)} }
+        @keyframes kb-pan-left  { from{transform:scale(1.08) translate(0%,-1%)} to{transform:scale(1.08) translate(-3%,0)} }
+
+        .ts-slide-bg { position:absolute; inset:0; opacity:0; transition:opacity 2s ease; overflow:hidden; }
         .ts-slide-bg.active { opacity:1; }
-        .ts-slide-bg.active .kb-inner { animation: kbZoom 7s ease-in-out forwards; }
-        .kb-inner { position:absolute; inset:-8%; background-size:cover; background-position:inherit; will-change:transform; }
+        .kb-inner { position:absolute; inset:-6%; background-size:cover; will-change:transform; }
+        .ts-slide-bg.active .kb-inner.motion-zoom-in   { animation:kb-zoom-in   7s ease-in-out forwards; }
+        .ts-slide-bg.active .kb-inner.motion-zoom-out  { animation:kb-zoom-out  7s ease-in-out forwards; }
+        .ts-slide-bg.active .kb-inner.motion-pan-right { animation:kb-pan-right 7s ease-in-out forwards; }
+        .ts-slide-bg.active .kb-inner.motion-pan-left  { animation:kb-pan-left  7s ease-in-out forwards; }
+
         .hero-h1    { opacity:0; animation:slideUp 0.9s 0.1s both ease; }
         .hero-sub   { opacity:0; animation:slideUp 0.7s 0.35s both ease; }
         .hero-btns  { opacity:0; animation:slideUp 0.7s 0.55s both ease; }
-        .hero-stats { opacity:0; animation:fadeIn 0.8s 0.8s both ease; }
+        .hero-stats { opacity:0; animation:fadeIn  0.8s 0.8s both ease; }
+
         .ts-start-btn:hover { background:#2ecc71 !important; box-shadow:0 4px 28px rgba(74,222,128,0.4) !important; }
         .ts-start-btn:active { transform:scale(0.97); }
         .ts-howto-btn:hover { color:rgba(255,255,255,0.75) !important; border-color:rgba(255,255,255,0.35) !important; }
+
+        /* Modal shared styles */
+        .mgr-input {
+          background:rgba(255,255,255,0.06); border:1.5px solid rgba(255,255,255,0.12);
+          border-radius:8px; padding:14px 16px; color:#fff;
+          font-family:'Barlow',sans-serif; font-size:15px; width:100%;
+          outline:none; transition:border-color 0.2s; box-sizing:border-box;
+        }
+        .mgr-input:focus { border-color:rgba(0,232,122,0.6); }
+        .mgr-input::placeholder { color:rgba(255,255,255,0.2); }
+        .mgr-select {
+          background:rgba(255,255,255,0.06); border:1.5px solid rgba(255,255,255,0.12);
+          border-radius:8px; padding:12px 10px; color:#fff;
+          font-family:'Barlow Condensed',sans-serif; font-size:15px;
+          outline:none; cursor:pointer; transition:border-color 0.2s;
+          appearance:none; -webkit-appearance:none; text-align:center;
+        }
+        .mgr-select:focus { border-color:rgba(0,232,122,0.6); }
+        .mgr-select option { background:#0f1318; }
+        .mgr-btn-primary {
+          width:100%; padding:14px 0; background:#4ade80; color:#000;
+          border:none; border-radius:8px; font-family:'Barlow Condensed',sans-serif;
+          font-size:15px; font-weight:700; letter-spacing:3px; text-transform:uppercase;
+          cursor:pointer; box-shadow:0 4px 20px rgba(74,222,128,0.25);
+          transition:all 0.2s; -webkit-tap-highlight-color:transparent; display:block;
+        }
+        .mgr-btn-primary:hover { background:#2ecc71; }
+        .mgr-mode-btn {
+          background:rgba(255,255,255,0.05); border-radius:14px;
+          padding:24px 28px; text-align:left; width:100%;
+          transition:all 0.2s; -webkit-tap-highlight-color:transparent;
+        }
+        .mgr-mode-btn-active { border:1.5px solid rgba(0,232,122,0.4); cursor:pointer; }
+        .mgr-mode-btn-active:hover { background:rgba(0,232,122,0.08); border-color:rgba(0,232,122,0.7); }
+        .mgr-mode-btn-disabled { border:1.5px solid rgba(255,255,255,0.1); }
       `}</style>
 
       {/* Loader */}
@@ -628,11 +705,12 @@ export default function Home() {
         <div style={{ fontFamily:'var(--font-mono)', fontSize:11, letterSpacing:3, color:'rgba(255,255,255,0.25)', textTransform:'uppercase' }}>{loaderProgress}%</div>
       </div>
 
-      {/* Ken Burns slideshow bg */}
-      <div style={{ position:'fixed', inset:0, zIndex:0, display: modal ? 'none' : 'block' }}>
-        {SLIDES.map((slide_item, i) => (
-          <div key={i} className={`ts-slide-bg ${i === slide ? 'active' : ''}`} style={{ backgroundPosition: slide_item.pos }}>
-            <div className="kb-inner" style={{ backgroundImage:`url(${slide_item.url})`, backgroundPosition: slide_item.pos }}/>
+      {/* Slideshow bg — hidden when modal open */}
+      <div style={{ position:'fixed', inset:0, zIndex:0, display: modalOpen ? 'none' : 'block' }}>
+        {SLIDES.map((s, i) => (
+          <div key={i} className={`ts-slide-bg ${i===slide?'active':''}`}>
+            <div className={`kb-inner motion-${s.motion}`}
+              style={{ backgroundImage:`url(${s.url})`, backgroundPosition:s.pos }}/>
           </div>
         ))}
         <div style={{ position:'absolute', inset:0, background:'linear-gradient(to right, rgba(4,6,10,0.97) 0%, rgba(4,6,10,0.82) 50%, rgba(4,6,10,0.35) 100%)' }}/>
@@ -650,7 +728,7 @@ export default function Home() {
               Build a dynasty. Dominate the league. Prove you've got what it takes.
             </p>
             <div className="hero-btns" style={{ display:'flex', gap:12, flexWrap:'wrap' }}>
-              <button className="ts-start-btn" onClick={()=>setModal('profile')} style={{ background:'#4ade80', color:'#000', border:'none', borderRadius:6, fontFamily:'var(--font-display)', fontSize:'clamp(12px,2.5vw,14px)', fontWeight:700, letterSpacing:2, textTransform:'uppercase', padding:'clamp(12px,3vw,14px) clamp(22px,5vw,32px)', cursor:'pointer', boxShadow:'0 4px 20px rgba(74,222,128,0.25)', transition:'all 0.2s', display:'flex', alignItems:'center', gap:8, WebkitTapHighlightColor:'transparent' }}>
+              <button className="ts-start-btn" onClick={()=>setModalOpen(true)} style={{ background:'#4ade80', color:'#000', border:'none', borderRadius:6, fontFamily:'var(--font-display)', fontSize:'clamp(12px,2.5vw,14px)', fontWeight:700, letterSpacing:2, textTransform:'uppercase', padding:'clamp(12px,3vw,14px) clamp(22px,5vw,32px)', cursor:'pointer', boxShadow:'0 4px 20px rgba(74,222,128,0.25)', transition:'all 0.2s', display:'flex', alignItems:'center', gap:8, WebkitTapHighlightColor:'transparent' }}>
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
                 Start Career
               </button>
@@ -672,28 +750,14 @@ export default function Home() {
         </div>
       </div>
 
-      {/* Modal flow */}
-      {modal === 'profile' && (
-        <ManagerProfileModal
-          onNext={handleProfileNext}
-          onClose={()=>setModal(null)}
-        />
-      )}
-      {modal === 'mode' && (
-        <CareerModeModal
-          onTakeCharge={handleTakeCharge}
-          onBuildFromScratch={handleBuildFromScratch}
-          onBack={()=>setModal('profile')}
-        />
-      )}
-      {modal === 'clubs' && (
-        <TeamSelectModal
-          allClubs={allClubs||[]}
-          allPlayers={allPlayers||[]}
-          onSelect={handleSelect}
-          onBack={()=>setModal('mode')}
-        />
-      )}
+      {/* Single unified modal */}
+      <UnifiedModal
+        isOpen={modalOpen}
+        onClose={()=>setModalOpen(false)}
+        onComplete={handleComplete}
+        allClubs={allClubs||[]}
+        allPlayers={allPlayers||[]}
+      />
     </>
   );
 }
