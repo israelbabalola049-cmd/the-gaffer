@@ -1,16 +1,25 @@
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import useGameStore from '../store/gameStore';
 
-/* ─────────────────────────────────────────
-   HELPERS
-───────────────────────────────────────── */
-const fmtVal = (n) => {
-  if (!n) return '—';
-  if (n >= 1e9) return `£${(n/1e9).toFixed(1)}B`;
-  if (n >= 1e6) return `£${(n/1e6).toFixed(1)}M`;
-  if (n >= 1e3) return `£${(n/1e3).toFixed(0)}K`;
-  return `£${n}`;
+/* ═══════════════════════════════════════════════
+   CONSTANTS & CONFIG
+═══════════════════════════════════════════════ */
+
+const COMP_COLORS = {
+  'Premier League':     { primary:'#3d0064', accent:'#a855f7', label:'PL' },
+  'La Liga':            { primary:'#c2410c', accent:'#f97316', label:'LL' },
+  'Bundesliga':         { primary:'#d20515', accent:'#ef4444', label:'BL' },
+  'Serie A':            { primary:'#1a1a6b', accent:'#6366f1', label:'SA' },
+  'Ligue 1':            { primary:'#001f5f', accent:'#3b82f6', label:'L1' },
+  'Champions League':   { primary:'#1a3a6b', accent:'#60a5fa', label:'UCL' },
+  'Europa League':      { primary:'#c05000', accent:'#fb923c', label:'UEL' },
+  'Conference League':  { primary:'#0a5c36', accent:'#34d399', label:'UECL' },
+  'FA Cup':             { primary:'#003087', accent:'#60a5fa', label:'FAC' },
+  'Carabao Cup':        { primary:'#003087', accent:'#4ade80', label:'CC' },
+  'Cup':                { primary:'#c9a227', accent:'#fbbf24', label:'CUP' },
 };
+
+const getComp = (name) => COMP_COLORS[name] || { primary:'#333', accent:'#888', label:'?' };
 
 const CLUB_COLOR = {
   'Real Madrid':'#FEBE10','Barcelona':'#A50044','Manchester City':'#6CABDD',
@@ -33,29 +42,41 @@ const CLUB_BADGE_URL = {
   'Brighton':          'https://resources.premierleague.com/premierleague/badges/50/t36.png',
 };
 
-function ClubBadgeMini({ name, size = 28 }) {
+/* ═══════════════════════════════════════════════
+   HELPERS
+═══════════════════════════════════════════════ */
+
+function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+function rnd(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
+
+function ClubBadge({ name, size = 28 }) {
   const [failed, setFailed] = useState(false);
   const url = CLUB_BADGE_URL[name];
   const color = CLUB_COLOR[name] || '#888';
-  const abbr = name?.slice(0,3).toUpperCase() || '?';
+  const abbr = name?.slice(0, 3).toUpperCase() || '?';
   if (url && !failed) {
     return <img src={url} alt={name} onError={() => setFailed(true)}
-      style={{ width:size, height:size, objectFit:'contain', flexShrink:0 }} />;
+      style={{ width: size, height: size, objectFit: 'contain', flexShrink: 0 }} />;
   }
   return (
     <div style={{
-      width:size, height:size, borderRadius:5, flexShrink:0,
-      background:`${color}22`, border:`1.5px solid ${color}44`,
-      display:'flex', alignItems:'center', justifyContent:'center',
-      fontFamily:'var(--font-display)', fontSize:size*0.28, color, letterSpacing:0.5,
+      width: size, height: size, borderRadius: 5, flexShrink: 0,
+      background: `${color}22`, border: `1.5px solid ${color}44`,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      fontFamily: 'var(--font-display)', fontSize: size * 0.28, color, letterSpacing: 0.5,
     }}>{abbr}</div>
   );
 }
 
-/* ─────────────────────────────────────────
+function FormDot({ result }) {
+  const c = result === 'W' ? '#00e87a' : result === 'D' ? '#f5c518' : '#ff3b5c';
+  return <div style={{ width: 8, height: 8, borderRadius: '50%', background: c, flexShrink: 0 }} />;
+}
+
+/* ═══════════════════════════════════════════════
    FIXTURE GENERATOR
-   Generates a round-robin league schedule
-───────────────────────────────────────── */
+═══════════════════════════════════════════════ */
+
 function generateFixtures(myClub, allClubs, season) {
   const leagueClubs = allClubs.filter(c => c.league === myClub.league && c.name !== myClub.name);
   if (!leagueClubs.length) return [];
@@ -63,49 +84,38 @@ function generateFixtures(myClub, allClubs, season) {
   const fixtures = [];
   let week = 1;
 
-  // home and away against every league club
-  leagueClubs.forEach((opponent, i) => {
+  // Round-robin league
+  leagueClubs.forEach((opponent) => {
     fixtures.push({
       id: `s${season}-w${week}-h`,
-      week: week,
-      home: myClub.name,
-      away: opponent.name,
-      isHome: true,
-      competition: myClub.league,
-      played: false,
-      homeGoals: null,
-      awayGoals: null,
+      week, day: week * 7 - 3,
+      home: myClub.name, away: opponent.name, isHome: true,
+      competition: myClub.league, played: false,
+      homeGoals: null, awayGoals: null,
     });
     week++;
     fixtures.push({
       id: `s${season}-w${week}-a`,
-      week: week,
-      home: opponent.name,
-      away: myClub.name,
-      isHome: false,
-      competition: myClub.league,
-      played: false,
-      homeGoals: null,
-      awayGoals: null,
+      week, day: week * 7 - 3,
+      home: opponent.name, away: myClub.name, isHome: false,
+      competition: myClub.league, played: false,
+      homeGoals: null, awayGoals: null,
     });
     week++;
   });
 
-  // add a cup run (simple knockout, 4 rounds)
+  // Cup knockout
   const cupOpponents = [...leagueClubs].sort(() => Math.random() - 0.5).slice(0, 4);
+  const roundNames = ['Round of 32', 'Quarter-Final', 'Semi-Final', 'Final'];
   cupOpponents.forEach((opponent, i) => {
-    const roundNames = ['Round of 32','Quarter-Final','Semi-Final','Final'];
     fixtures.push({
       id: `s${season}-cup-${i}`,
-      week: week,
+      week, day: week * 7 - 1,
       home: i % 2 === 0 ? myClub.name : opponent.name,
       away: i % 2 === 0 ? opponent.name : myClub.name,
       isHome: i % 2 === 0,
-      competition: 'Cup',
-      cupRound: roundNames[i],
-      played: false,
-      homeGoals: null,
-      awayGoals: null,
+      competition: 'Cup', cupRound: roundNames[i],
+      played: false, homeGoals: null, awayGoals: null,
     });
     week += 2;
   });
@@ -113,552 +123,1667 @@ function generateFixtures(myClub, allClubs, season) {
   return fixtures;
 }
 
-/* ─────────────────────────────────────────
+/* ═══════════════════════════════════════════════
    MATCH ENGINE
-───────────────────────────────────────── */
+═══════════════════════════════════════════════ */
+
 function getTeamRating(squad) {
-  if (!squad || !squad.length) return 70;
-  const top11 = [...squad].sort((a,b) => b.overall - a.overall).slice(0,11);
-  return Math.round(top11.reduce((s,p) => s+p.overall, 0) / top11.length);
+  if (!squad?.length) return 70;
+  const top11 = [...squad].sort((a, b) => b.overall - a.overall).slice(0, 11);
+  return Math.round(top11.reduce((s, p) => s + p.overall, 0) / top11.length);
 }
 
-function simulateGoals(attRating, defRating, talkBonus = 0) {
-  const strength = Math.max(0.3, Math.min(2.5, (attRating + talkBonus - defRating + 10) / 20));
-  const base = Math.random() * strength;
-  if (base < 0.15) return 0;
-  if (base < 0.45) return 1;
-  if (base < 0.75) return 2;
-  if (base < 0.90) return 3;
-  if (base < 0.97) return 4;
-  return 5;
+function simulateFullMatch(myRating, oppRating, talkBonus = 0, tacticsMod = 0, isHome = true) {
+  const homeAdv = isHome ? 4 : -2;
+  const chaos = rnd(0, 18);
+  const myStr = Math.max(45, Math.min(95, myRating + talkBonus + tacticsMod + homeAdv + rnd(-5, 5)));
+  const oppStr = Math.max(45, Math.min(95, oppRating + rnd(-5, 5) + chaos * 0.3));
+
+  const myXg = Math.max(0.1, (myStr - oppStr * 0.6) / 20 + Math.random() * 0.8);
+  const oppXg = Math.max(0.1, (oppStr - myStr * 0.5) / 22 + Math.random() * 0.7);
+
+  const scoreGoals = (xg) => {
+    const chance = Math.random();
+    if (xg > 2.0) return chance < 0.15 ? 4 : chance < 0.4 ? 3 : chance < 0.7 ? 2 : 1;
+    if (xg > 1.4) return chance < 0.1 ? 3 : chance < 0.35 ? 2 : chance < 0.7 ? 1 : 0;
+    if (xg > 0.9) return chance < 0.05 ? 3 : chance < 0.25 ? 2 : chance < 0.55 ? 1 : 0;
+    if (xg > 0.5) return chance < 0.2 ? 2 : chance < 0.5 ? 1 : 0;
+    return chance < 0.25 ? 1 : 0;
+  };
+
+  return {
+    myGoals: scoreGoals(myXg),
+    oppGoals: scoreGoals(oppXg),
+    myXg: parseFloat(myXg.toFixed(2)),
+    oppXg: parseFloat(oppXg.toFixed(2)),
+  };
 }
 
-const COMMENTARY = {
-  goal:     (name, min) => [`${min}' GOAL! ${name} finds the back of the net!`, `${min}' ${name} scores! The crowd erupts!`, `${min}' Clinical finish from ${name}!`],
-  miss:     (min) => [`${min}' Great chance goes begging.`, `${min}' Shot straight at the keeper.`, `${min}' Off the post! So close.`],
-  save:     (min) => [`${min}' Brilliant save from the goalkeeper!`, `${min}' Denied! What a stop.`],
-  foul:     (min) => [`${min}' Foul given. Free kick opportunity.`, `${min}' Referee stops play.`],
-  pressure: (min) => [`${min}' Sustained pressure from the attacking side.`, `${min}' Good spell of possession.`],
-  halfTime: ()    => [`HALF TIME. Teams head to the dressing rooms.`],
-  fullTime: ()    => [`FULL TIME. The final whistle blows!`],
+/* ─── Commentary pools ─── */
+const COMMS = {
+  goal:    (n, min) => pick([
+    `${min}' GOAL! ${n} rifles it into the corner!`,
+    `${min}' ${n} scores! Clinical finish — the crowd goes wild!`,
+    `${min}' Beautiful move, ${n} tucks it away calmly!`,
+    `${min}' What a strike from ${n}! Top bins!`,
+    `${min}' ${n} doesn't miss from there — 1 more!`,
+  ]),
+  oppGoal: (n, min) => pick([
+    `${min}' Goal conceded. ${n} punishes a defensive lapse.`,
+    `${min}' ${n} makes it count. The defence caught cold.`,
+    `${min}' Unfortunate. ${n} finds the net — back to work.`,
+    `${min}' ${n} scores. They take advantage of the mistake.`,
+  ]),
+  shot:    (min) => pick([
+    `${min}' Shot! Straight at the keeper.`,
+    `${min}' Great chance goes begging — just over the bar.`,
+    `${min}' Off the post! So agonisingly close.`,
+    `${min}' Curled effort — keeper tips it round.`,
+  ]),
+  save:    (min) => pick([
+    `${min}' Brilliant save! Keeps the score level.`,
+    `${min}' The goalkeeper pulls off a world-class stop!`,
+    `${min}' Denied! That was destined for the net.`,
+  ]),
+  yellow:  (n, min) => pick([
+    `${min}' Yellow card shown to ${n} for a rash challenge.`,
+    `${min}' Referee books ${n}. One more and he's walking.`,
+    `${min}' Cynical foul — ${n} gets a booking.`,
+  ]),
+  red:     (n, min) => pick([
+    `${min}' RED CARD! ${n} is off — down to ten men!`,
+    `${min}' Straight red for ${n}! Reckless tackle, no argument.`,
+  ]),
+  injury:  (n, min) => pick([
+    `${min}' ${n} goes down holding his ankle — looks serious.`,
+    `${min}' Trainer on the pitch — ${n} can't continue.`,
+  ]),
+  penalty: (n, min, scored) => scored
+    ? `${min}' PENALTY scored by ${n}! Keeper went the wrong way!`
+    : `${min}' Penalty MISSED by ${n}! The keeper guesses right!`,
+  var:     (min) => `${min}' VAR check underway... the referee goes to the monitor.`,
+  wonder:  (min) => pick([
+    `${min}' WONDER SAVE! Absolutely unbelievable stop!`,
+    `${min}' The keeper just denied a certain goal — what reflexes!`,
+  ]),
+  crossbar:(min) => pick([
+    `${min}' Off the crossbar! Inches away from a goal!`,
+    `${min}' The post denies them — the frame of the goal saves it!`,
+  ]),
+  press:   (min) => pick([
+    `${min}' Good pressure from the attacking side.`,
+    `${min}' Ball recycled well — probing for an opening.`,
+    `${min}' Neat passing sequence building toward goal.`,
+    `${min}' Possession held patiently looking for the break.`,
+  ]),
+  foul:    (min) => pick([
+    `${min}' Foul given. Free kick in a dangerous position.`,
+    `${min}' Play stopped — both benches react.`,
+    `${min}' The referee brings play to a halt.`,
+  ]),
+  halfTime:() => '— HALF TIME —',
+  fullTime:() => '— FULL TIME —',
 };
 
-function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+function buildCommentary(myGoals, oppGoals, myName, oppName, squad) {
+  const players = squad?.length ? squad : [];
+  const getPlayer = () => players.length
+    ? players[Math.floor(Math.random() * Math.min(11, players.length))].name.split(' ').pop()
+    : myName;
 
-function generateCommentary(myGoals, oppGoals, myName, oppName, squad) {
   const events = [];
-  const topScorer = squad?.length ? [...squad].sort((a,b) => b.shooting - a.shooting)[0] : null;
-  const scorerName = topScorer ? topScorer.name.split(' ').pop() : myName;
 
-  // first half events
-  let myHalf1 = 0, oppHalf1 = 0;
-  const totalFirst = myGoals > 0 ? Math.ceil(myGoals * 0.6) : 0;
-  const oppFirst   = oppGoals > 0 ? Math.ceil(oppGoals * 0.5) : 0;
+  // Place goals across the 90 mins
+  const allMins = Array.from({ length: 90 }, (_, i) => i + 1);
+  const shuffle = (a) => [...a].sort(() => Math.random() - 0.5);
+  const goalMins = shuffle(allMins);
 
-  const firstHalfMins = [8,14,19,23,28,33,37,41,44].sort(() => Math.random()-0.5);
-  let scored = 0, conceded = 0;
+  let myScored = 0, oppScored = 0;
+  const goalEvents = [];
 
-  for (let i = 0; i < 9; i++) {
-    const min = firstHalfMins[i];
-    if (scored < totalFirst && Math.random() > 0.5) {
-      events.push({ min, type:'goal', text: pick(COMMENTARY.goal(scorerName, min)), side:'my' });
-      scored++;
-    } else if (conceded < oppFirst && Math.random() > 0.6) {
-      events.push({ min, type:'goal', text: pick(COMMENTARY.goal(oppName.split(' ')[0], min)), side:'opp' });
-      conceded++;
-    } else if (Math.random() > 0.7) {
-      events.push({ min, type:'chance', text: pick(Math.random()>0.5 ? COMMENTARY.miss(min) : COMMENTARY.save(min)) });
-    } else {
-      events.push({ min, type:'info', text: pick(COMMENTARY.pressure(min)) });
+  // Assign goal minutes
+  goalMins.forEach(min => {
+    if (myScored < myGoals && Math.random() > 0.5) {
+      goalEvents.push({ min, side: 'my' });
+      myScored++;
+    } else if (oppScored < oppGoals && Math.random() > 0.5) {
+      goalEvents.push({ min, side: 'opp' });
+      oppScored++;
     }
-  }
-
-  events.push({ min:45, type:'halftime', text: pick(COMMENTARY.halfTime()) });
-
-  // second half
-  const secondHalfMins = [48,53,57,62,67,71,75,80,85,88].sort(() => Math.random()-0.5);
-  let scored2 = scored, conceded2 = conceded;
-
-  for (let i = 0; i < 10; i++) {
-    const min = secondHalfMins[i];
-    if (scored2 < myGoals && Math.random() > 0.4) {
-      events.push({ min, type:'goal', text: pick(COMMENTARY.goal(scorerName, min)), side:'my' });
-      scored2++;
-    } else if (conceded2 < oppGoals && Math.random() > 0.5) {
-      events.push({ min, type:'goal', text: pick(COMMENTARY.goal(oppName.split(' ')[0], min)), side:'opp' });
-      conceded2++;
-    } else if (Math.random() > 0.65) {
-      events.push({ min, type:'chance', text: pick(COMMENTARY.miss(min)) });
-    } else {
-      events.push({ min, type:'info', text: pick(COMMENTARY.foul(min)) });
+  });
+  // Fill remaining goals
+  goalMins.forEach(min => {
+    if (myScored < myGoals && !goalEvents.find(e => e.min === min && e.side === 'my')) {
+      goalEvents.push({ min: rnd(5, 89), side: 'my' });
+      myScored++;
     }
+  });
+  goalMins.forEach(min => {
+    if (oppScored < oppGoals && !goalEvents.find(e => e.min === min && e.side === 'opp')) {
+      goalEvents.push({ min: rnd(5, 89), side: 'opp' });
+      oppScored++;
+    }
+  });
+
+  goalEvents.forEach(({ min, side }) => {
+    const scorer = getPlayer();
+    events.push({
+      min, type: 'goal', side,
+      text: side === 'my' ? COMMS.goal(scorer, min) : COMMS.oppGoal(oppName.split(' ')[0], min),
+      scorer,
+    });
+  });
+
+  // Random events
+  const eventPool = [
+    ...Array.from({ length: 5 }, () => ({ min: rnd(1, 44), type: 'shot',    text: COMMS.shot(rnd(1, 44)) })),
+    ...Array.from({ length: 4 }, () => ({ min: rnd(46, 89), type: 'shot',   text: COMMS.shot(rnd(46, 89)) })),
+    ...Array.from({ length: 3 }, () => ({ min: rnd(5, 85), type: 'save',    text: COMMS.save(rnd(5, 85)) })),
+    ...Array.from({ length: 2 }, () => ({ min: rnd(10, 80), type: 'yellow', text: COMMS.yellow(getPlayer(), rnd(10, 80)) })),
+    ...Array.from({ length: 6 }, () => ({ min: rnd(1, 44), type: 'info',    text: COMMS.press(rnd(1, 44)) })),
+    ...Array.from({ length: 6 }, () => ({ min: rnd(46, 89), type: 'info',   text: COMMS.press(rnd(46, 89)) })),
+    ...Array.from({ length: 3 }, () => ({ min: rnd(5, 85), type: 'foul',    text: COMMS.foul(rnd(5, 85)) })),
+  ];
+
+  // Rare events
+  if (Math.random() < 0.15) events.push({ min: rnd(20, 85), type: 'red',      text: COMMS.red(getPlayer(), rnd(20, 85)) });
+  if (Math.random() < 0.20) events.push({ min: rnd(10, 80), type: 'crossbar', text: COMMS.crossbar(rnd(10, 80)) });
+  if (Math.random() < 0.18) events.push({ min: rnd(30, 80), type: 'wonder',   text: COMMS.wonder(rnd(30, 80)) });
+  if (Math.random() < 0.12) events.push({ min: rnd(40, 85), type: 'var',      text: COMMS.var(rnd(40, 85)) });
+  if (Math.random() < 0.10) {
+    const pMin = rnd(15, 85);
+    const pScored = Math.random() > 0.25;
+    events.push({ min: pMin, type: 'penalty', side: pScored ? 'my' : 'none', text: COMMS.penalty(getPlayer(), pMin, pScored) });
   }
+  if (Math.random() < 0.15) events.push({ min: rnd(30, 75), type: 'injury', text: COMMS.injury(getPlayer(), rnd(30, 75)) });
 
-  events.push({ min:90, type:'fulltime', text: pick(COMMENTARY.fullTime()) });
+  const all = [...events, ...eventPool];
+  all.push({ min: 45, type: 'halftime', text: COMMS.halfTime() });
+  all.push({ min: 90, type: 'fulltime', text: COMMS.fullTime() });
 
-  return events.sort((a,b) => a.min - b.min);
+  return all.sort((a, b) => a.min - b.min || (a.type === 'goal' ? -1 : 1));
 }
 
-/* ─────────────────────────────────────────
-   SUB COMPONENTS
-───────────────────────────────────────── */
-function Card({ children, style }) {
+/* ═══════════════════════════════════════════════
+   PRESS CONFERENCE QUESTIONS
+═══════════════════════════════════════════════ */
+
+const PRE_QUESTIONS = [
+  {
+    q: "Your squad is full of egos right now. How do you keep them unified?",
+    answers: [
+      { text: "I remind them trophies speak louder than egos. No one wins alone.", good: true },
+      { text: "I let them express themselves — happy players play better.", good: false },
+      { text: "Strict discipline. Anyone who disrupts the group is dropped.", good: true },
+      { text: "It's not really a problem I'm losing sleep over, to be honest.", good: false },
+    ],
+    effect: { morale: 4, rating: 1 },
+  },
+  {
+    q: "The media is saying your striker lacks big-game mentality. Your response?",
+    answers: [
+      { text: "He's been excellent in training. He'll prove people wrong on the pitch.", good: true },
+      { text: "I agree, honestly. I'm considering dropping him for this one.", good: false },
+      { text: "The media can say what they like. My trust in him doesn't waver.", good: true },
+      { text: "These questions don't help anyone. Next.", good: false },
+    ],
+    effect: { morale: 3, rating: 1 },
+  },
+  {
+    q: "You're the underdog heading into this. Does that relieve pressure or add it?",
+    answers: [
+      { text: "Being underestimated is exactly where we thrive. Watch us.", good: true },
+      { text: "There's no pressure. We just focus on our own performance.", good: false },
+      { text: "It adds pressure — I expect nothing less than three points regardless.", good: false },
+      { text: "It frees us. No expectations means we can play without fear.", good: true },
+    ],
+    effect: { morale: 5, rating: 1 },
+  },
+  {
+    q: "Three matches without a win. Is this a crisis?",
+    answers: [
+      { text: "Not at all. We've been unlucky with results, but the performances are there.", good: true },
+      { text: "I'll be honest — yes. We need a reaction and we need it now.", good: false },
+      { text: "We've been performing well. The squad is fully behind the process.", good: true },
+      { text: "Results define crisis. We're not panicking, but we're not happy either.", good: false },
+    ],
+    effect: { morale: -3, rating: -1 },
+  },
+  {
+    q: "Reports claim your captain wants to leave at the end of the season. Comment?",
+    answers: [
+      { text: "My captain is fully committed. I speak to him daily — this is noise.", good: true },
+      { text: "Every player has a price. If the right offer comes, we'll discuss.", good: false },
+      { text: "I won't address speculation. He plays on Saturday, that's all that matters.", good: true },
+      { text: "It concerns me. I'd be lying if I said it doesn't affect the group.", good: false },
+    ],
+    effect: { morale: 4, rating: 2 },
+  },
+  {
+    q: "Your opponents have 15 goals in the last 4 games. How do you stop them?",
+    answers: [
+      { text: "Organisation and compactness. We'll frustrate them and hit on the break.", good: true },
+      { text: "We focus on ourselves. You control what you can control.", good: false },
+      { text: "We've done our homework. We know exactly where they're vulnerable.", good: true },
+      { text: "Honestly, you can't fully stop quality. You just hope to limit it.", good: false },
+    ],
+    effect: { morale: 3, rating: 1 },
+  },
+  {
+    q: "A top club linked with your best player. Will you fight to keep him?",
+    answers: [
+      { text: "Absolutely. He's not going anywhere. This club matches his ambitions.", good: true },
+      { text: "We'll cross that bridge when we come to it. He's focused right now.", good: false },
+      { text: "Money talks in football. But our project speaks louder than any fee.", good: true },
+      { text: "I can't control his ambitions. I can only control the environment I build.", good: false },
+    ],
+    effect: { morale: 3, rating: 1 },
+  },
+  {
+    q: "This match is a must-win for top-four ambitions. Agree?",
+    answers: [
+      { text: "Every game is a final at this stage. That mindset is non-negotiable.", good: true },
+      { text: "In football nothing is ever must-win — but we want three points badly.", good: true },
+      { text: "I don't use that language. It creates unnecessary pressure on the group.", good: false },
+      { text: "Yes, bluntly — we need this. No sugarcoating it.", good: false },
+    ],
+    effect: { morale: 4, rating: 1 },
+  },
+];
+
+const POST_QUESTIONS_WIN = [
+  {
+    q: "A convincing performance. What was the key to unlocking them today?",
+    answers: [
+      { text: "Pressing high and winning second balls. We suffocated their build-up.", good: true },
+      { text: "We were just better. Simple as that.", good: false },
+      { text: "The tactical setup gave us overloads on the left — we exploited that.", good: true },
+      { text: "Honestly? A bit of luck plus quality. That combination is hard to stop.", good: false },
+    ],
+    effect: { morale: 4, rating: 1 },
+  },
+  {
+    q: "Your striker was anonymous for 70 minutes before scoring. Happy with that?",
+    answers: [
+      { text: "He stayed in the game mentally and punished them when it mattered. That's elite.", good: true },
+      { text: "No, he needs to be more involved. I'll be having that conversation with him.", good: false },
+      { text: "Strikers live for those moments. He delivered. That's all I ask.", good: true },
+      { text: "It worried me at half-time, I'll be honest. But he answered.", good: false },
+    ],
+    effect: { morale: 3, rating: 1 },
+  },
+];
+
+const POST_QUESTIONS_LOSS = [
+  {
+    q: "A tough afternoon. Was that the worst performance of your tenure?",
+    answers: [
+      { text: "Not at all. We had chances — the result is harsh given the performance.", good: true },
+      { text: "Yes. I won't hide from that. We simply weren't good enough today.", good: false },
+      { text: "Results can be deceiving. We played well in phases.", good: true },
+      { text: "I'll need to see it back. I'm too frustrated to be fair right now.", good: false },
+    ],
+    effect: { morale: -3, rating: -1 },
+  },
+  {
+    q: "Three points dropped. Is the dressing room still behind you?",
+    answers: [
+      { text: "100%. Losing together is what defines a squad. We'll come back stronger.", good: true },
+      { text: "I'll ask them. It's a question I can't answer for them.", good: false },
+      { text: "I have total faith in this group. One result doesn't break us.", good: true },
+      { text: "That's a question for them, not me. All I can do is lead.", good: false },
+    ],
+    effect: { morale: -4, rating: -2 },
+  },
+];
+
+/* ═══════════════════════════════════════════════
+   TEAM TALK OPTIONS
+═══════════════════════════════════════════════ */
+
+const TEAM_TALKS = [
+  {
+    id: 'destroy',
+    label: 'We go out there and destroy them.',
+    quote: '"No mercy. Attack from the first whistle. I want them rattled before half-time."',
+    tone: 'Aggressive',
+    bonus: 3, tactic: 'attack', moraleMod: 5,
+    color: '#ef4444',
+  },
+  {
+    id: 'discipline',
+    label: 'Stay disciplined. Don\'t give them space.',
+    quote: '"Shape is everything today. We win the battle in midfield and the rest follows."',
+    tone: 'Tactical',
+    bonus: 1, tactic: 'defensive', moraleMod: 1,
+    color: '#3b82f6',
+  },
+  {
+    id: 'moment',
+    label: 'This is our moment. The fans are behind us.',
+    quote: '"Seventy thousand people out there believe in you. Don\'t let the moment pass."',
+    tone: 'Inspirational',
+    bonus: 2, tactic: 'balanced', moraleMod: 7,
+    color: '#f59e0b',
+  },
+  {
+    id: 'simple',
+    label: 'Keep it simple. Execute the plan.',
+    quote: '"No heroics. We\'ve trained for this. Trust the system, trust each other."',
+    tone: 'Composed',
+    bonus: 1, tactic: 'balanced', moraleMod: 2,
+    color: '#10b981',
+  },
+  {
+    id: 'believe',
+    label: 'I believe in every single one of you.',
+    quote: '"From the first name on the team sheet to the last sub on the bench — you\'re all ready."',
+    tone: 'Personal',
+    bonus: 2, tactic: 'balanced', moraleMod: 8,
+    color: '#8b5cf6',
+  },
+];
+
+const FORMATIONS = ['4-3-3', '4-4-2', '4-2-3-1', '3-5-2', '5-3-2', '3-4-3'];
+
+/* ═══════════════════════════════════════════════
+   FORMATION PITCH LAYOUT
+═══════════════════════════════════════════════ */
+
+const FORMATION_POSITIONS = {
+  '4-3-3':   [
+    { x:50, y:88, pos:'GK' },
+    { x:15, y:70, pos:'LB' }, { x:35, y:72, pos:'CB' }, { x:65, y:72, pos:'CB' }, { x:85, y:70, pos:'RB' },
+    { x:22, y:50, pos:'CM' }, { x:50, y:47, pos:'CM' }, { x:78, y:50, pos:'CM' },
+    { x:15, y:25, pos:'LW' }, { x:50, y:22, pos:'ST' }, { x:85, y:25, pos:'RW' },
+  ],
+  '4-4-2':   [
+    { x:50, y:88, pos:'GK' },
+    { x:15, y:70, pos:'LB' }, { x:35, y:72, pos:'CB' }, { x:65, y:72, pos:'CB' }, { x:85, y:70, pos:'RB' },
+    { x:12, y:50, pos:'LM' }, { x:35, y:50, pos:'CM' }, { x:65, y:50, pos:'CM' }, { x:88, y:50, pos:'RM' },
+    { x:35, y:22, pos:'ST' }, { x:65, y:22, pos:'ST' },
+  ],
+  '4-2-3-1': [
+    { x:50, y:88, pos:'GK' },
+    { x:15, y:70, pos:'LB' }, { x:35, y:72, pos:'CB' }, { x:65, y:72, pos:'CB' }, { x:85, y:70, pos:'RB' },
+    { x:35, y:55, pos:'CDM' }, { x:65, y:55, pos:'CDM' },
+    { x:15, y:35, pos:'LM' }, { x:50, y:38, pos:'CAM' }, { x:85, y:35, pos:'RM' },
+    { x:50, y:18, pos:'ST' },
+  ],
+  '3-5-2':   [
+    { x:50, y:88, pos:'GK' },
+    { x:25, y:72, pos:'CB' }, { x:50, y:74, pos:'CB' }, { x:75, y:72, pos:'CB' },
+    { x:10, y:50, pos:'LWB' }, { x:30, y:52, pos:'CM' }, { x:50, y:50, pos:'CM' }, { x:70, y:52, pos:'CM' }, { x:90, y:50, pos:'RWB' },
+    { x:35, y:22, pos:'ST' }, { x:65, y:22, pos:'ST' },
+  ],
+  '5-3-2':   [
+    { x:50, y:88, pos:'GK' },
+    { x:10, y:70, pos:'LWB' }, { x:28, y:72, pos:'CB' }, { x:50, y:74, pos:'CB' }, { x:72, y:72, pos:'CB' }, { x:90, y:70, pos:'RWB' },
+    { x:25, y:48, pos:'CM' }, { x:50, y:46, pos:'CM' }, { x:75, y:48, pos:'CM' },
+    { x:35, y:22, pos:'ST' }, { x:65, y:22, pos:'ST' },
+  ],
+  '3-4-3':   [
+    { x:50, y:88, pos:'GK' },
+    { x:25, y:72, pos:'CB' }, { x:50, y:74, pos:'CB' }, { x:75, y:72, pos:'CB' },
+    { x:12, y:52, pos:'LM' }, { x:38, y:52, pos:'CM' }, { x:62, y:52, pos:'CM' }, { x:88, y:52, pos:'RM' },
+    { x:18, y:22, pos:'LW' }, { x:50, y:18, pos:'ST' }, { x:82, y:22, pos:'RW' },
+  ],
+};
+
+/* ═══════════════════════════════════════════════
+   CALENDAR STRIP
+═══════════════════════════════════════════════ */
+
+const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+function CalendarStrip({ fixtures, currentDay, onDayTap, playedIds }) {
+  const stripRef = useRef(null);
+  const totalDays = Math.max(currentDay + 21, fixtures.length ? fixtures[fixtures.length - 1].day + 7 : 60);
+
+  // Map fixture days
+  const fixByDay = useMemo(() => {
+    const m = {};
+    fixtures.forEach(f => {
+      if (!m[f.day]) m[f.day] = [];
+      m[f.day].push(f);
+    });
+    return m;
+  }, [fixtures]);
+
+  // Build day array
+  const days = useMemo(() => {
+    return Array.from({ length: totalDays }, (_, i) => {
+      const dayNum = i + 1;
+      const monthIdx = Math.floor((dayNum - 1) / 30) % 12;
+      const dayOfMonth = ((dayNum - 1) % 30) + 1;
+      const dayNames = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+      const dayName = dayNames[(dayNum - 1) % 7];
+      return { dayNum, monthIdx, dayOfMonth, dayName, fixtures: fixByDay[dayNum] || [] };
+    });
+  }, [totalDays, fixByDay]);
+
+  // Scroll to current day on mount
+  useEffect(() => {
+    if (stripRef.current) {
+      const idx = currentDay - 1;
+      const cellW = 56;
+      stripRef.current.scrollLeft = Math.max(0, idx * cellW - 80);
+    }
+  }, [currentDay]);
+
   return (
-    <div style={{ background:'var(--bg-3)', border:'1px solid var(--border)', borderRadius:10, overflow:'hidden', ...style }}>
-      {children}
+    <div style={{ position: 'sticky', top: 52, zIndex: 15, background: 'var(--bg-1)', borderBottom: '1px solid var(--border)' }}>
+      {/* Month label row */}
+      <div style={{ padding: '6px 16px 2px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: 'var(--text-muted)', letterSpacing: 3, textTransform: 'uppercase' }}>
+          {MONTH_NAMES[days[currentDay - 1]?.monthIdx ?? 0]} · Season {1}
+        </span>
+        <span style={{ fontFamily: 'var(--font-display)', fontSize: 11, fontWeight: 700, color: 'var(--green)' }}>
+          Day {currentDay}
+        </span>
+      </div>
+
+      {/* Day strip */}
+      <div
+        ref={stripRef}
+        style={{
+          display: 'flex', overflowX: 'auto', gap: 0,
+          scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch',
+          paddingBottom: 4,
+        }}
+      >
+        <style>{`.cal-strip::-webkit-scrollbar{display:none}`}</style>
+        {days.map(({ dayNum, dayName, dayOfMonth, fixtures: dayFixtures }) => {
+          const isCurrent = dayNum === currentDay;
+          const isPast = dayNum < currentDay;
+          const hasFixture = dayFixtures.length > 0;
+          const isPlayed = hasFixture && dayFixtures.every(f => playedIds.has(f.id));
+          const firstFixture = dayFixtures[0];
+          const comp = firstFixture ? getComp(firstFixture.competition) : null;
+          const oppName = firstFixture
+            ? (firstFixture.isHome ? firstFixture.away : firstFixture.home)
+            : null;
+
+          return (
+            <div
+              key={dayNum}
+              onClick={() => onDayTap(dayNum, firstFixture)}
+              style={{
+                flexShrink: 0, width: 56, display: 'flex', flexDirection: 'column',
+                alignItems: 'center', gap: 2, padding: '4px 0 6px',
+                cursor: 'pointer', position: 'relative',
+                background: isCurrent ? 'rgba(0,232,122,0.06)' : 'transparent',
+                borderBottom: isCurrent ? '2px solid var(--green)' : '2px solid transparent',
+                opacity: isPast && !hasFixture ? 0.35 : 1,
+                transition: 'background 0.15s',
+              }}
+            >
+              <span style={{
+                fontFamily: 'var(--font-mono)', fontSize: 7, letterSpacing: 1,
+                color: isCurrent ? 'var(--green)' : 'var(--text-muted)',
+                textTransform: 'uppercase',
+              }}>{dayName}</span>
+
+              <span style={{
+                fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: isCurrent ? 900 : 600,
+                color: isCurrent ? 'var(--green)' : isPast ? 'var(--text-muted)' : 'var(--text)',
+                lineHeight: 1,
+              }}>{dayOfMonth}</span>
+
+              {/* Fixture indicator */}
+              {hasFixture && (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, marginTop: 2 }}>
+                  {/* Competition color strip */}
+                  <div style={{
+                    width: 28, height: 3, borderRadius: 2,
+                    background: isPlayed ? '#555' : comp.accent,
+                    opacity: isPlayed ? 0.5 : 1,
+                  }} />
+                  {/* Opponent badge */}
+                  <ClubBadge name={oppName} size={20} />
+                </div>
+              )}
+              {!hasFixture && <div style={{ height: 25 }} />}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
 
-function CompBadge({ competition }) {
-  const isLeague = competition !== 'Cup';
-  const color = isLeague ? 'var(--green)' : 'var(--yellow)';
-  const bg = isLeague ? 'rgba(0,232,122,0.1)' : 'rgba(245,197,24,0.1)';
-  const border = isLeague ? 'rgba(0,232,122,0.25)' : 'rgba(245,197,24,0.25)';
-  return (
-    <span style={{
-      background:bg, border:`1px solid ${border}`, borderRadius:3,
-      padding:'2px 7px', fontFamily:'var(--font-mono)', fontSize:8,
-      color, letterSpacing:1.5, textTransform:'uppercase', flexShrink:0,
-    }}>{isLeague ? 'League' : 'Cup'}</span>
-  );
-}
+/* ═══════════════════════════════════════════════
+   PREVIEW TAB
+═══════════════════════════════════════════════ */
 
-/* ─────────────────────────────────────────
-   SCREENS
-───────────────────────────────────────── */
+function PreviewTab({ nextFixture, myClub, myRating, oppRating, onPlay, results }) {
+  if (!nextFixture) {
+    return (
+      <div style={{ padding: '60px 16px', textAlign: 'center', fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)', letterSpacing: 2, textTransform: 'uppercase' }}>
+        Season complete
+      </div>
+    );
+  }
 
-/* 1. PRE-MATCH */
-function PreMatch({ fixture, myClub, myRating, oppRating, onKickOff, onBack }) {
-  const [talk, setTalk] = useState(null);
-  const oppName = fixture.isHome ? fixture.away : fixture.home;
-  const accColor = CLUB_COLOR[myClub?.name] || '#00e87a';
-
-  const talks = [
-    { id:'motivate', label:'Motivate', desc:'Fire them up. Attack with intent.', bonus:3, color:'var(--green)' },
-    { id:'calm',     label:'Stay Calm', desc:'Control the game. Be patient.', bonus:1, color:'var(--blue)' },
-    { id:'demand',   label:'Demand More', desc:'No excuses. Maximum effort.', bonus:2, color:'var(--red)' },
-  ];
+  const comp = getComp(nextFixture.competition);
+  const oppName = nextFixture.isHome ? nextFixture.away : nextFixture.home;
+  const myForm = results.slice(-5).map(r => r.myGoals > r.oppGoals ? 'W' : r.myGoals === r.oppGoals ? 'D' : 'L');
+  const myColor = CLUB_COLOR[myClub?.name] || '#00e87a';
 
   return (
-    <div style={{ padding:'16px', display:'flex', flexDirection:'column', gap:14 }}>
+    <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 14 }}>
 
-      {/* back */}
-      <button onClick={onBack} style={{ background:'none', border:'none', color:'var(--text-muted)', fontFamily:'var(--font-mono)', fontSize:10, letterSpacing:2, textTransform:'uppercase', cursor:'pointer', display:'flex', alignItems:'center', gap:6, padding:0, alignSelf:'flex-start' }}>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-        Back
-      </button>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ width: 3, height: 20, borderRadius: 2, background: comp.accent }} />
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: comp.accent, letterSpacing: 3, textTransform: 'uppercase' }}>
+          {nextFixture.competition} {nextFixture.cupRound ? `· ${nextFixture.cupRound}` : ''}
+        </span>
+        <span style={{ marginLeft: 'auto', fontFamily: 'var(--font-mono)', fontSize: 8, color: 'var(--text-muted)', letterSpacing: 2 }}>
+          WEEK {nextFixture.week} · {nextFixture.isHome ? 'HOME' : 'AWAY'}
+        </span>
+      </div>
 
-      {/* matchup card */}
-      <Card>
-        <div style={{ padding:'20px 16px' }}>
-          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:16 }}>
-            <CompBadge competition={fixture.competition} />
-            {fixture.cupRound && (
-              <span style={{ fontFamily:'var(--font-mono)', fontSize:8, color:'var(--text-muted)', letterSpacing:1.5 }}>{fixture.cupRound}</span>
-            )}
-            <span style={{ fontFamily:'var(--font-mono)', fontSize:9, color:'var(--text-muted)', letterSpacing:1.5 }}>WEEK {fixture.week}</span>
+      {/* Matchup hero */}
+      <div style={{
+        background: `linear-gradient(135deg, ${comp.primary}44 0%, var(--bg-3) 100%)`,
+        border: `1px solid ${comp.accent}33`,
+        borderRadius: 12, padding: '20px 16px',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+            <ClubBadge name={nextFixture.home} size={52} />
+            <span style={{ fontFamily: 'var(--font-display)', fontSize: 12, fontWeight: 700, color: 'var(--text)', textAlign: 'center', lineHeight: 1.2 }}>{nextFixture.home}</span>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 26, fontWeight: 900, color: nextFixture.isHome ? myColor : 'var(--text-muted)', lineHeight: 1 }}>
+              {nextFixture.isHome ? myRating : oppRating}
+            </div>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 7, color: 'var(--text-muted)', letterSpacing: 2 }}>OVR</span>
           </div>
 
-          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:12 }}>
-            {/* home */}
-            <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:8, flex:1 }}>
-              <ClubBadgeMini name={fixture.home} size={44} />
-              <span style={{ fontFamily:'var(--font-display)', fontSize:13, fontWeight:700, color:'var(--text)', textAlign:'center', lineHeight:1.2 }}>{fixture.home}</span>
-              <span style={{ fontFamily:'var(--font-display)', fontSize:20, fontWeight:900, color: fixture.isHome ? accColor : 'var(--text-muted)' }}>{fixture.isHome ? myRating : oppRating}</span>
-              <span style={{ fontFamily:'var(--font-mono)', fontSize:7, color:'var(--text-muted)', letterSpacing:2 }}>OVR</span>
-            </div>
-
-            <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:4 }}>
-              <span style={{ fontFamily:'var(--font-display)', fontSize:22, fontWeight:900, color:'var(--text-muted)' }}>VS</span>
-              <span style={{ fontFamily:'var(--font-mono)', fontSize:8, color:'var(--text-muted)', letterSpacing:1.5 }}>{fixture.isHome ? 'HOME' : 'AWAY'}</span>
-            </div>
-
-            {/* away */}
-            <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:8, flex:1 }}>
-              <ClubBadgeMini name={fixture.away} size={44} />
-              <span style={{ fontFamily:'var(--font-display)', fontSize:13, fontWeight:700, color:'var(--text)', textAlign:'center', lineHeight:1.2 }}>{fixture.away}</span>
-              <span style={{ fontFamily:'var(--font-display)', fontSize:20, fontWeight:900, color: !fixture.isHome ? accColor : 'var(--text-muted)' }}>{!fixture.isHome ? myRating : oppRating}</span>
-              <span style={{ fontFamily:'var(--font-mono)', fontSize:7, color:'var(--text-muted)', letterSpacing:2 }}>OVR</span>
-            </div>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+            <span style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 900, color: 'var(--text-muted)' }}>VS</span>
+            <div style={{ width: 1, height: 40, background: 'var(--border)' }} />
           </div>
-        </div>
-      </Card>
 
-      {/* team talk */}
-      <div>
-        <div style={{ fontFamily:'var(--font-mono)', fontSize:9, color:'var(--text-muted)', letterSpacing:3, textTransform:'uppercase', marginBottom:10 }}>Team Talk</div>
-        <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-          {talks.map(t => (
-            <button key={t.id} onClick={() => setTalk(t.id)} style={{
-              display:'flex', alignItems:'center', justifyContent:'space-between',
-              padding:'12px 14px', borderRadius:8, cursor:'pointer', transition:'all 0.15s',
-              background: talk===t.id ? `${t.color === 'var(--green)' ? 'rgba(0,232,122,0.12)' : t.color === 'var(--blue)' ? 'rgba(59,130,246,0.12)' : 'rgba(255,59,92,0.12)'}` : 'var(--bg-3)',
-              border: talk===t.id ? `1px solid ${t.color === 'var(--green)' ? 'rgba(0,232,122,0.4)' : t.color === 'var(--blue)' ? 'rgba(59,130,246,0.4)' : 'rgba(255,59,92,0.4)'}` : '1px solid var(--border)',
-            }}>
-              <div style={{ textAlign:'left' }}>
-                <div style={{ fontFamily:'var(--font-display)', fontSize:14, fontWeight:700, color: talk===t.id ? t.color : 'var(--text)', letterSpacing:0.5 }}>{t.label}</div>
-                <div style={{ fontFamily:'var(--font-body)', fontSize:11, color:'var(--text-muted)', marginTop:2 }}>{t.desc}</div>
-              </div>
-              <div style={{ width:18, height:18, borderRadius:'50%', border:`2px solid ${talk===t.id ? t.color : 'var(--border-mid)'}`, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
-                {talk===t.id && <div style={{ width:8, height:8, borderRadius:'50%', background:t.color }} />}
-              </div>
-            </button>
-          ))}
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+            <ClubBadge name={nextFixture.away} size={52} />
+            <span style={{ fontFamily: 'var(--font-display)', fontSize: 12, fontWeight: 700, color: 'var(--text)', textAlign: 'center', lineHeight: 1.2 }}>{nextFixture.away}</span>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 26, fontWeight: 900, color: !nextFixture.isHome ? myColor : 'var(--text-muted)', lineHeight: 1 }}>
+              {!nextFixture.isHome ? myRating : oppRating}
+            </div>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 7, color: 'var(--text-muted)', letterSpacing: 2 }}>OVR</span>
+          </div>
         </div>
       </div>
 
-      {/* kick off */}
-      <button
-        onClick={() => onKickOff(talks.find(t => t.id === talk)?.bonus || 0)}
-        disabled={!talk}
-        style={{
-          width:'100%', padding:'16px', borderRadius:8,
-          background: talk ? 'var(--green)' : 'var(--bg-4)',
-          border: 'none', color: talk ? '#000' : 'var(--text-muted)',
-          fontFamily:'var(--font-display)', fontSize:16, fontWeight:800,
-          letterSpacing:1.5, cursor: talk ? 'pointer' : 'not-allowed',
-          transition:'all 0.2s', marginTop:4,
-        }}
-      >
-        KICK OFF
+      {/* Stats comparison */}
+      <div style={{ background: 'var(--bg-3)', border: '1px solid var(--border)', borderRadius: 10, padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: 'var(--text-muted)', letterSpacing: 3, textTransform: 'uppercase' }}>Squad Comparison</span>
+        {[
+          ['ATT', Math.round(myRating * 1.02), Math.round(oppRating * 0.98)],
+          ['MID', Math.round(myRating * 0.99), Math.round(oppRating * 1.01)],
+          ['DEF', Math.round(myRating * 0.97), Math.round(oppRating * 1.03)],
+        ].map(([label, myVal, oppVal]) => {
+          const total = myVal + oppVal;
+          const myPct = Math.round((myVal / total) * 100);
+          return (
+            <div key={label}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                <span style={{ fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700, color: myColor }}>{myVal}</span>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: 'var(--text-muted)', letterSpacing: 2, alignSelf: 'center' }}>{label}</span>
+                <span style={{ fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700, color: 'var(--text-muted)' }}>{oppVal}</span>
+              </div>
+              <div style={{ height: 3, background: 'var(--bg-5)', borderRadius: 2, overflow: 'hidden', display: 'flex' }}>
+                <div style={{ width: `${myPct}%`, background: myColor, transition: 'width 0.4s' }} />
+                <div style={{ flex: 1, background: '#555' }} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Form */}
+      <div style={{ background: 'var(--bg-3)', border: '1px solid var(--border)', borderRadius: 10, padding: '12px 16px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: 'var(--text-muted)', letterSpacing: 2, textTransform: 'uppercase', marginBottom: 6 }}>Your Form</div>
+            <div style={{ display: 'flex', gap: 5 }}>
+              {myForm.length ? myForm.map((r, i) => <FormDot key={i} result={r} />) : <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-muted)' }}>No matches yet</span>}
+            </div>
+          </div>
+          {/* H2H */}
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: 'var(--text-muted)', letterSpacing: 2, textTransform: 'uppercase', marginBottom: 6 }}>H2H</div>
+            <span style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: 'var(--text-muted)' }}>No previous meetings</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Kick Off */}
+      <button onClick={onPlay} style={{
+        width: '100%', padding: 16, borderRadius: 10,
+        background: `linear-gradient(135deg, ${comp.accent}, ${myColor})`,
+        border: 'none', color: '#000',
+        fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 900,
+        letterSpacing: 2, cursor: 'pointer', transition: 'opacity 0.2s',
+      }}>
+        SET UP MATCH
       </button>
     </div>
   );
 }
 
-/* 2. LIVE SIM */
-function LiveSim({ fixture, myGoals, oppGoals, events, minute, isFinished, onSub, onFinish }) {
+/* ═══════════════════════════════════════════════
+   RESULTS TAB
+═══════════════════════════════════════════════ */
+
+function ResultsTab({ results, fixtures }) {
+  const [compFilter, setCompFilter] = useState('All');
+  const [expanded, setExpanded] = useState(null);
+
+  const comps = useMemo(() => {
+    const s = new Set(results.map(r => r.competition));
+    return ['All', ...s];
+  }, [results]);
+
+  const filtered = compFilter === 'All' ? results : results.filter(r => r.competition === compFilter);
+
+  return (
+    <div style={{ paddingBottom: 16 }}>
+      {/* Competition filter */}
+      <div style={{ display: 'flex', gap: 6, overflowX: 'auto', padding: '10px 16px', scrollbarWidth: 'none', borderBottom: '1px solid var(--border)' }}>
+        {comps.map(c => (
+          <button key={c} onClick={() => setCompFilter(c)} style={{
+            flexShrink: 0, padding: '5px 12px', borderRadius: 20,
+            background: compFilter === c ? 'var(--green)' : 'var(--bg-3)',
+            border: compFilter === c ? 'none' : '1px solid var(--border)',
+            color: compFilter === c ? '#000' : 'var(--text-muted)',
+            fontFamily: 'var(--font-mono)', fontSize: 8, letterSpacing: 1.5,
+            textTransform: 'uppercase', cursor: 'pointer', whiteSpace: 'nowrap',
+          }}>{c}</button>
+        ))}
+      </div>
+
+      {filtered.length === 0 && (
+        <div style={{ padding: '50px 16px', textAlign: 'center', fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-muted)', letterSpacing: 2, textTransform: 'uppercase' }}>
+          No results yet
+        </div>
+      )}
+
+      {[...filtered].reverse().map((r, i) => {
+        const result = r.myGoals > r.oppGoals ? 'W' : r.myGoals === r.oppGoals ? 'D' : 'L';
+        const rc = result === 'W' ? '#00e87a' : result === 'D' ? '#f5c518' : '#ff3b5c';
+        const comp = getComp(r.competition);
+        const isOpen = expanded === i;
+
+        return (
+          <div key={i} onClick={() => setExpanded(isOpen ? null : i)} style={{ cursor: 'pointer' }}>
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 10, padding: '11px 16px',
+              borderBottom: '1px solid var(--border)',
+              borderLeft: `3px solid ${comp.accent}`,
+              background: isOpen ? 'var(--bg-2)' : 'transparent',
+            }}>
+              <div style={{
+                width: 22, height: 22, borderRadius: 5,
+                background: `${rc}18`, border: `1px solid ${rc}44`,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontFamily: 'var(--font-display)', fontSize: 11, fontWeight: 800, color: rc, flexShrink: 0,
+              }}>{result}</div>
+
+              <ClubBadge name={r.opponent} size={22} />
+
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontFamily: 'var(--font-body)', fontSize: 12, fontWeight: 600, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  vs {r.opponent}
+                </div>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 7, color: comp.accent, letterSpacing: 1.5, textTransform: 'uppercase', marginTop: 2 }}>
+                  {r.competition} · W{r.week}
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                <span style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 900, color: 'var(--text)' }}>{r.homeGoals}</span>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)' }}>–</span>
+                <span style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 900, color: 'var(--text)' }}>{r.awayGoals}</span>
+              </div>
+            </div>
+
+            {isOpen && r.scorers && (
+              <div style={{ padding: '10px 16px 12px', background: 'var(--bg-2)', borderBottom: '1px solid var(--border)' }}>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: 'var(--text-muted)', letterSpacing: 2, textTransform: 'uppercase', marginBottom: 6 }}>Scorers</div>
+                {r.scorers.map((s, j) => (
+                  <div key={j} style={{ fontFamily: 'var(--font-body)', fontSize: 12, color: 'var(--text-dim)', marginBottom: 2 }}>
+                    {s.name} <span style={{ color: 'var(--text-muted)' }}>{s.min}'</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════
+   PRE-MATCH FLOW
+═══════════════════════════════════════════════ */
+
+function PreMatchFlow({ fixture, myClub, myRating, oppRating, squad, onKickOff, onBack }) {
+  const [step, setStep] = useState('conference'); // conference | team | talk
+  const [confSkipped, setConfSkipped] = useState(false);
+  const [confQs, setConfQs] = useState(() => {
+    const shuffled = [...PRE_QUESTIONS].sort(() => Math.random() - 0.5);
+    return shuffled.slice(0, 3).map(q => ({
+      ...q,
+      answers: [...q.answers].sort(() => Math.random() - 0.5),
+    }));
+  });
+  const [confIdx, setConfIdx] = useState(0);
+  const [confAnswered, setConfAnswered] = useState([]);
+  const [confResult, setConfResult] = useState(null); // { text, good }
+  const [confDone, setConfDone] = useState(false);
+  const [confBonus, setConfBonus] = useState({ morale: 0, rating: 0 });
+
+  const [formation, setFormation] = useState(FORMATIONS[0]);
+  const [selectedTalk, setSelectedTalk] = useState(null);
+  const [lineup, setLineup] = useState([]); // player indices
+
+  const positions = FORMATION_POSITIONS[formation] || FORMATION_POSITIONS['4-3-3'];
+
+  const myColor = CLUB_COLOR[myClub?.name] || '#00e87a';
+  const comp = getComp(fixture.competition);
+  const oppName = fixture.isHome ? fixture.away : fixture.home;
+
+  // Auto-fill lineup from top 11
+  useEffect(() => {
+    if (squad?.length) {
+      const top11 = [...squad].sort((a, b) => b.overall - a.overall).slice(0, 11);
+      setLineup(top11);
+    }
+  }, [squad]);
+
+  const steps = confSkipped ? ['team', 'talk'] : ['conference', 'team', 'talk'];
+  const stepIdx = steps.indexOf(step);
+  const totalSteps = steps.length;
+
+  function handleAnswer(answer) {
+    setConfResult({ text: answer.text, good: answer.good });
+    const effect = confQs[confIdx].effect;
+    if (answer.good) {
+      setConfBonus(b => ({ morale: b.morale + effect.morale, rating: b.rating + effect.rating }));
+    } else {
+      setConfBonus(b => ({ morale: b.morale - Math.floor(effect.morale / 2), rating: b.rating - 1 }));
+    }
+    setTimeout(() => {
+      setConfResult(null);
+      if (confIdx + 1 >= confQs.length) {
+        setConfDone(true);
+      } else {
+        setConfIdx(i => i + 1);
+        setConfAnswered([]);
+      }
+    }, 1200);
+  }
+
+  function handleKickOffFinal() {
+    const talk = TEAM_TALKS.find(t => t.id === selectedTalk);
+    onKickOff({
+      talkBonus: talk?.bonus || 0,
+      tacticsMod: talk?.id === 'destroy' ? 3 : talk?.id === 'discipline' ? -2 : 0,
+      confBonus,
+      lineup,
+      formation,
+      talk,
+    });
+  }
+
+  /* ─── STEP INDICATOR ─── */
+  const StepBar = () => (
+    <div style={{ display: 'flex', gap: 4, padding: '10px 16px 0', alignItems: 'center' }}>
+      {steps.map((s, i) => (
+        <div key={s} style={{
+          flex: 1, height: 3, borderRadius: 2,
+          background: i <= stepIdx ? comp.accent : 'var(--bg-5)',
+          transition: 'background 0.3s',
+        }} />
+      ))}
+    </div>
+  );
+
+  /* ─── CONFERENCE ─── */
+  if (step === 'conference') {
+    const q = confQs[confIdx];
+    return (
+      <div style={{ minHeight: '100vh', background: 'var(--bg-1)', display: 'flex', flexDirection: 'column' }}>
+        <StepBar />
+        <div style={{ padding: '12px 16px 6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <button onClick={onBack} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: 2, cursor: 'pointer', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
+            Back
+          </button>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: 'var(--text-muted)', letterSpacing: 2 }}>PRE-MATCH CONFERENCE</span>
+          <button onClick={() => { setConfSkipped(true); setStep('team'); }} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: 1.5, cursor: 'pointer', textTransform: 'uppercase' }}>
+            Skip
+          </button>
+        </div>
+
+        {confDone ? (
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 20, padding: 32 }}>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 800, color: 'var(--text)', textAlign: 'center' }}>Conference Done</div>
+            <div style={{ display: 'flex', gap: 16 }}>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 900, color: confBonus.morale >= 0 ? 'var(--green)' : 'var(--red)' }}>{confBonus.morale >= 0 ? '+' : ''}{confBonus.morale}</div>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: 'var(--text-muted)', letterSpacing: 2, textTransform: 'uppercase' }}>Morale</div>
+              </div>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 900, color: confBonus.rating >= 0 ? 'var(--green)' : 'var(--red)' }}>{confBonus.rating >= 0 ? '+' : ''}{confBonus.rating}</div>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: 'var(--text-muted)', letterSpacing: 2, textTransform: 'uppercase' }}>Manager Rating</div>
+              </div>
+            </div>
+            <button onClick={() => setStep('team')} style={{
+              padding: '14px 40px', borderRadius: 8, background: comp.accent,
+              border: 'none', color: '#000', fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 800,
+              letterSpacing: 1.5, cursor: 'pointer',
+            }}>SELECT TEAM</button>
+          </div>
+        ) : (
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '24px 16px', gap: 20 }}>
+            {/* Journalist card */}
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+              <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--bg-4)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="1.5"><circle cx="12" cy="8" r="4" /><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" /></svg>
+              </div>
+              <div style={{ background: 'var(--bg-3)', border: '1px solid var(--border)', borderRadius: '0 10px 10px 10px', padding: '12px 14px', flex: 1 }}>
+                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 7, color: 'var(--text-muted)', letterSpacing: 2, textTransform: 'uppercase', marginBottom: 6 }}>
+                  Q{confIdx + 1} of {confQs.length}
+                </div>
+                <div style={{ fontFamily: 'var(--font-body)', fontSize: 14, color: 'var(--text)', lineHeight: 1.5 }}>
+                  {q.q}
+                </div>
+              </div>
+            </div>
+
+            {/* Answer options */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {q.answers.map((ans, i) => {
+                const isSelected = confAnswered.includes(i);
+                return (
+                  <button key={i} onClick={() => { if (!confResult) { setConfAnswered([i]); handleAnswer(ans); } }} style={{
+                    padding: '12px 14px', borderRadius: 8, textAlign: 'left', cursor: confResult ? 'default' : 'pointer',
+                    background: confResult && isSelected ? (ans.good ? 'rgba(0,232,122,0.1)' : 'rgba(255,59,92,0.1)') : 'var(--bg-3)',
+                    border: confResult && isSelected
+                      ? `1px solid ${ans.good ? 'rgba(0,232,122,0.5)' : 'rgba(255,59,92,0.5)'}`
+                      : '1px solid var(--border)',
+                    transition: 'all 0.2s',
+                  }}>
+                    <span style={{ fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--text)', lineHeight: 1.4 }}>
+                      {ans.text}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Effect flash */}
+            {confResult && (
+              <div style={{
+                padding: '10px 14px', borderRadius: 8, textAlign: 'center',
+                background: confResult.good ? 'rgba(0,232,122,0.1)' : 'rgba(255,59,92,0.1)',
+                border: `1px solid ${confResult.good ? 'rgba(0,232,122,0.3)' : 'rgba(255,59,92,0.3)'}`,
+                fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700,
+                color: confResult.good ? 'var(--green)' : 'var(--red)',
+                animation: 'fadeIn 0.2s ease',
+              }}>
+                {confResult.good
+                  ? `Crowd reacts well · Morale +${confQs[confIdx].effect.morale}`
+                  : `Awkward silence · Morale -${Math.floor(confQs[confIdx].effect.morale / 2)}`}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  /* ─── TEAM SELECTION ─── */
+  if (step === 'team') {
+    return (
+      <div style={{ minHeight: '100vh', background: 'var(--bg-1)', display: 'flex', flexDirection: 'column' }}>
+        <StepBar />
+        <div style={{ padding: '12px 16px 6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <button onClick={() => setStep(confSkipped ? 'conference' : 'conference')} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: 2, cursor: 'pointer', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
+            Back
+          </button>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: 'var(--text-muted)', letterSpacing: 2 }}>TEAM SELECTION</span>
+          <div style={{ width: 40 }} />
+        </div>
+
+        {/* Formation selector */}
+        <div style={{ overflowX: 'auto', scrollbarWidth: 'none', padding: '8px 16px' }}>
+          <div style={{ display: 'flex', gap: 6 }}>
+            {FORMATIONS.map(f => (
+              <button key={f} onClick={() => setFormation(f)} style={{
+                flexShrink: 0, padding: '5px 12px', borderRadius: 16,
+                background: formation === f ? comp.accent : 'var(--bg-3)',
+                border: formation === f ? 'none' : '1px solid var(--border)',
+                color: formation === f ? '#000' : 'var(--text-muted)',
+                fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 700, letterSpacing: 1,
+                cursor: 'pointer', whiteSpace: 'nowrap',
+              }}>{f}</button>
+            ))}
+          </div>
+        </div>
+
+        {/* Pitch */}
+        <div style={{ position: 'relative', margin: '0 16px', borderRadius: 10, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.08)' }}>
+          <svg viewBox="0 0 100 100" style={{ width: '100%', display: 'block' }}>
+            {/* Pitch background */}
+            <defs>
+              <linearGradient id="grass" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#0a2e0a" />
+                <stop offset="100%" stopColor="#0d3b0d" />
+              </linearGradient>
+            </defs>
+            <rect width="100" height="100" fill="url(#grass)" />
+
+            {/* Pitch markings */}
+            <rect x="5" y="5" width="90" height="90" fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth="0.5" />
+            <line x1="5" y1="50" x2="95" y2="50" stroke="rgba(255,255,255,0.12)" strokeWidth="0.4" />
+            <circle cx="50" cy="50" r="12" fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="0.4" />
+            <circle cx="50" cy="50" r="0.8" fill="rgba(255,255,255,0.3)" />
+            <rect x="30" y="5" width="40" height="14" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="0.4" />
+            <rect x="30" y="81" width="40" height="14" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="0.4" />
+            <rect x="38" y="5" width="24" height="7" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="0.4" />
+            <rect x="38" y="88" width="24" height="7" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="0.4" />
+
+            {/* Player dots */}
+            {positions.map((p, i) => {
+              const player = lineup[i];
+              return (
+                <g key={i}>
+                  <circle cx={p.x} cy={p.y} r="5" fill={myColor} opacity="0.9" />
+                  <circle cx={p.x} cy={p.y} r="5" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="0.5" />
+                  <text x={p.x} y={p.y + 0.8} textAnchor="middle" dominantBaseline="middle" fontSize="2.8" fill="#fff" fontFamily="sans-serif" fontWeight="bold">
+                    {player ? player.name.split(' ').pop().slice(0, 4) : p.pos}
+                  </text>
+                  <text x={p.x} y={p.y + 9} textAnchor="middle" fontSize="2.2" fill="rgba(255,255,255,0.5)" fontFamily="sans-serif">
+                    {p.pos}
+                  </text>
+                </g>
+              );
+            })}
+          </svg>
+        </div>
+
+        {/* Lineup list */}
+        <div style={{ padding: '10px 16px 16px', flex: 1, overflowY: 'auto' }}>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: 'var(--text-muted)', letterSpacing: 3, textTransform: 'uppercase', marginBottom: 8 }}>
+            Starting XI
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {positions.map((p, i) => {
+              const player = lineup[i];
+              return (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', background: 'var(--bg-3)', borderRadius: 7, border: '1px solid var(--border)' }}>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: comp.accent, width: 32, letterSpacing: 1 }}>{p.pos}</span>
+                  <span style={{ fontFamily: 'var(--font-body)', fontSize: 12, color: 'var(--text)', flex: 1 }}>{player?.name || '—'}</span>
+                  {player && <span style={{ fontFamily: 'var(--font-display)', fontSize: 12, fontWeight: 700, color: 'var(--text-muted)' }}>{player.overall}</span>}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <div style={{ padding: '0 16px 16px' }}>
+          <button onClick={() => setStep('talk')} style={{
+            width: '100%', padding: 14, borderRadius: 8,
+            background: comp.accent, border: 'none', color: '#000',
+            fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 800,
+            letterSpacing: 1.5, cursor: 'pointer',
+          }}>TEAM TALK</button>
+        </div>
+      </div>
+    );
+  }
+
+  /* ─── TEAM TALK ─── */
+  if (step === 'talk') {
+    return (
+      <div style={{ minHeight: '100vh', background: 'var(--bg-1)', display: 'flex', flexDirection: 'column' }}>
+        <StepBar />
+        <div style={{ padding: '12px 16px 6px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <button onClick={() => setStep('team')} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: 2, cursor: 'pointer', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
+            Back
+          </button>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: 'var(--text-muted)', letterSpacing: 2 }}>TEAM TALK</span>
+          <div style={{ width: 40 }} />
+        </div>
+
+        <div style={{ padding: '16px', flex: 1, display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={{ fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--text-muted)', marginBottom: 4, lineHeight: 1.5 }}>
+            The dressing room falls silent. Every player looks to you. What do you say?
+          </div>
+
+          {TEAM_TALKS.map(t => {
+            const isSelected = selectedTalk === t.id;
+            return (
+              <button key={t.id} onClick={() => setSelectedTalk(t.id)} style={{
+                padding: '14px 16px', borderRadius: 10, textAlign: 'left', cursor: 'pointer',
+                background: isSelected ? `${t.color}18` : 'var(--bg-3)',
+                border: isSelected ? `1px solid ${t.color}55` : '1px solid var(--border)',
+                borderLeft: isSelected ? `3px solid ${t.color}` : '3px solid transparent',
+                transition: 'all 0.15s',
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
+                  <span style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, color: isSelected ? t.color : 'var(--text)', letterSpacing: 0.5 }}>
+                    {t.label}
+                  </span>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 7, color: t.color, letterSpacing: 1.5, textTransform: 'uppercase', opacity: 0.8, flexShrink: 0, marginLeft: 8, marginTop: 2 }}>
+                    {t.tone}
+                  </span>
+                </div>
+                <div style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: 'var(--text-muted)', fontStyle: 'italic', lineHeight: 1.5 }}>
+                  {t.quote}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+
+        <div style={{ padding: '0 16px 20px' }}>
+          <button
+            onClick={handleKickOffFinal}
+            disabled={!selectedTalk}
+            style={{
+              width: '100%', padding: 16, borderRadius: 10,
+              background: selectedTalk ? `linear-gradient(135deg, ${comp.accent}, ${myColor})` : 'var(--bg-4)',
+              border: 'none', color: selectedTalk ? '#000' : 'var(--text-muted)',
+              fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 900,
+              letterSpacing: 2, cursor: selectedTalk ? 'pointer' : 'not-allowed',
+              transition: 'all 0.2s',
+            }}
+          >
+            KICK OFF
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return null;
+}
+
+/* ═══════════════════════════════════════════════
+   LIVE SIM
+═══════════════════════════════════════════════ */
+
+function LiveSim({ fixture, myGoals, oppGoals, events, minute, isFinished, squad, onSub, onFinish, speed, onSpeedChange }) {
   const myName = fixture.isHome ? fixture.home : fixture.away;
   const oppName = fixture.isHome ? fixture.away : fixture.home;
   const myScore = fixture.isHome ? myGoals : oppGoals;
   const oppScore = fixture.isHome ? oppGoals : myGoals;
   const result = myGoals > oppGoals ? 'W' : myGoals === oppGoals ? 'D' : 'L';
-  const resultColor = result === 'W' ? 'var(--green)' : result === 'D' ? 'var(--yellow)' : 'var(--red)';
+  const rc = result === 'W' ? '#00e87a' : result === 'D' ? '#f5c518' : '#ff3b5c';
   const feedRef = useRef(null);
+  const myColor = CLUB_COLOR[myClub?.name] || '#00e87a';
 
   useEffect(() => {
     if (feedRef.current) feedRef.current.scrollTop = feedRef.current.scrollHeight;
   }, [events]);
 
-  return (
-    <div style={{ padding:'16px', display:'flex', flexDirection:'column', gap:12 }}>
+  const eventIcon = (type) => {
+    if (type === 'goal')     return '⚽';
+    if (type === 'yellow')   return '🟨';
+    if (type === 'red')      return '🟥';
+    if (type === 'injury')   return '🚑';
+    if (type === 'penalty')  return '🎯';
+    if (type === 'var')      return '📺';
+    if (type === 'wonder')   return '🧤';
+    if (type === 'crossbar') return '🏅';
+    if (type === 'halftime' || type === 'fulltime') return '—';
+    return '';
+  };
 
-      {/* scoreboard */}
-      <Card>
-        <div style={{ padding:'16px', textAlign:'center' }}>
-          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:8 }}>
-            <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:6 }}>
-              <ClubBadgeMini name={fixture.home} size={36} />
-              <span style={{ fontFamily:'var(--font-display)', fontSize:11, fontWeight:700, color:'var(--text-dim)', textAlign:'center', lineHeight:1.2 }}>{fixture.home}</span>
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', background: 'var(--bg-1)', paddingBottom: 80 }}>
+
+      {/* Scoreboard — sticky */}
+      <div style={{ position: 'sticky', top: 52, zIndex: 10, background: 'var(--bg-2)', borderBottom: '1px solid var(--border)' }}>
+        <div style={{ padding: '12px 16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+            {/* Home */}
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+              <ClubBadge name={fixture.home} size={32} />
+              <span style={{ fontFamily: 'var(--font-display)', fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textAlign: 'center' }}>{fixture.home}</span>
             </div>
-            <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:4 }}>
-              <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                <span style={{ fontFamily:'var(--font-display)', fontSize:44, fontWeight:900, color:'var(--text)', lineHeight:1 }}>{fixture.isHome ? myScore : oppScore}</span>
-                <span style={{ fontFamily:'var(--font-display)', fontSize:24, color:'var(--text-muted)' }}>–</span>
-                <span style={{ fontFamily:'var(--font-display)', fontSize:44, fontWeight:900, color:'var(--text)', lineHeight:1 }}>{fixture.isHome ? oppScore : myScore}</span>
+
+            {/* Score */}
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontFamily: 'var(--font-display)', fontSize: 48, fontWeight: 900, color: 'var(--text)', lineHeight: 1 }}>{fixture.isHome ? myScore : oppScore}</span>
+                <span style={{ fontFamily: 'var(--font-display)', fontSize: 24, color: 'var(--text-muted)' }}>–</span>
+                <span style={{ fontFamily: 'var(--font-display)', fontSize: 48, fontWeight: 900, color: 'var(--text)', lineHeight: 1 }}>{fixture.isHome ? oppScore : myScore}</span>
               </div>
               <div style={{
-                fontFamily:'var(--font-mono)', fontSize:10, letterSpacing:2,
-                color: isFinished ? resultColor : 'var(--text-muted)',
-                background: isFinished ? `${resultColor === 'var(--green)' ? 'rgba(0,232,122,0.1)' : resultColor === 'var(--yellow)' ? 'rgba(245,197,24,0.1)' : 'rgba(255,59,92,0.1)'}` : 'var(--bg-4)',
-                border: `1px solid ${isFinished ? resultColor : 'var(--border)'}`,
-                borderRadius:4, padding:'2px 10px',
+                fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: 2,
+                color: isFinished ? rc : 'var(--text-muted)',
+                background: isFinished ? `${rc}18` : 'var(--bg-4)',
+                border: `1px solid ${isFinished ? rc + '44' : 'var(--border)'}`,
+                borderRadius: 4, padding: '2px 10px',
               }}>
                 {isFinished ? 'FT' : `${minute}'`}
               </div>
             </div>
-            <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:6 }}>
-              <ClubBadgeMini name={fixture.away} size={36} />
-              <span style={{ fontFamily:'var(--font-display)', fontSize:11, fontWeight:700, color:'var(--text-dim)', textAlign:'center', lineHeight:1.2 }}>{fixture.away}</span>
+
+            {/* Away */}
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+              <ClubBadge name={fixture.away} size={32} />
+              <span style={{ fontFamily: 'var(--font-display)', fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textAlign: 'center' }}>{fixture.away}</span>
             </div>
           </div>
-        </div>
-      </Card>
 
-      {/* commentary feed */}
-      <Card>
-        <div style={{ padding:'8px 14px 4px', borderBottom:'1px solid var(--border)' }}>
-          <span style={{ fontFamily:'var(--font-mono)', fontSize:8, color:'var(--text-muted)', letterSpacing:3, textTransform:'uppercase' }}>Live Commentary</span>
-        </div>
-        <div ref={feedRef} style={{ height:200, overflowY:'auto', padding:'8px 0' }}>
-          {events.map((e, i) => {
-            const isGoal = e.type === 'goal';
-            const isHalf = e.type === 'halftime';
-            const isFull = e.type === 'fulltime';
-            const isMy = e.side === 'my';
-            return (
-              <div key={i} style={{
-                display:'flex', gap:10, padding:'6px 14px',
-                background: isGoal ? (isMy ? 'rgba(0,232,122,0.05)' : 'rgba(255,59,92,0.05)') : 'transparent',
-                borderLeft: isGoal ? `2px solid ${isMy ? 'var(--green)' : 'var(--red)'}` : '2px solid transparent',
-                borderBottom: (isHalf || isFull) ? '1px solid var(--border)' : 'none',
-                animation:'fadeSlideIn 0.3s ease both',
-              }}>
-                <span style={{
-                  fontFamily:'var(--font-mono)', fontSize:9, fontWeight:700,
-                  color: isGoal ? (isMy ? 'var(--green)' : 'var(--red)') : isHalf || isFull ? 'var(--yellow)' : 'var(--text-muted)',
-                  width:24, flexShrink:0, paddingTop:1,
-                }}>{isHalf || isFull ? '—' : `${e.min}'`}</span>
-                <span style={{ fontFamily:'var(--font-body)', fontSize:12, color: isGoal ? 'var(--text)' : isHalf || isFull ? 'var(--text-dim)' : 'var(--text-muted)', lineHeight:1.5 }}>{e.text}</span>
-              </div>
-            );
-          })}
-          {!events.length && (
-            <div style={{ padding:'20px 14px', fontFamily:'var(--font-mono)', fontSize:9, color:'var(--text-muted)', letterSpacing:2, textTransform:'uppercase' }}>
-              Waiting for kick off...
+          {/* Speed controls */}
+          {!isFinished && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 8 }}>
+              {[1, 2, 5].map(s => (
+                <button key={s} onClick={() => onSpeedChange(s)} style={{
+                  padding: '3px 10px', borderRadius: 12,
+                  background: speed === s ? 'var(--green)' : 'var(--bg-4)',
+                  border: speed === s ? 'none' : '1px solid var(--border)',
+                  color: speed === s ? '#000' : 'var(--text-muted)',
+                  fontFamily: 'var(--font-mono)', fontSize: 8, fontWeight: 700, letterSpacing: 1,
+                  cursor: 'pointer',
+                }}>{s}x</button>
+              ))}
+              <button onClick={onFinish} style={{
+                padding: '3px 10px', borderRadius: 12,
+                background: 'var(--bg-4)', border: '1px solid var(--border)',
+                color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: 8, letterSpacing: 1,
+                cursor: 'pointer',
+              }}>Skip</button>
             </div>
           )}
         </div>
-      </Card>
+      </div>
 
-      {/* actions */}
-      {isFinished ? (
-        <button onClick={onFinish} style={{
-          width:'100%', padding:'16px', borderRadius:8,
-          background:'var(--green)', border:'none', color:'#000',
-          fontFamily:'var(--font-display)', fontSize:16, fontWeight:800,
-          letterSpacing:1.5, cursor:'pointer',
-        }}>
-          VIEW REPORT
-        </button>
-      ) : (
-        <button onClick={onSub} style={{
-          width:'100%', padding:'14px', borderRadius:8,
-          background:'var(--bg-3)', border:'1px solid var(--border)', color:'var(--text-dim)',
-          fontFamily:'var(--font-display)', fontSize:14, fontWeight:700,
-          letterSpacing:1, cursor:'pointer',
-        }}>
-          Make Substitution
-        </button>
-      )}
+      {/* Commentary feed */}
+      <div ref={feedRef} style={{ flex: 1, overflowY: 'auto', padding: '4px 0' }}>
+        {events.map((e, i) => {
+          const isGoal    = e.type === 'goal';
+          const isHalf    = e.type === 'halftime';
+          const isFull    = e.type === 'fulltime';
+          const isSpecial = ['red', 'wonder', 'crossbar', 'var', 'penalty'].includes(e.type);
+          const isMy      = e.side === 'my';
+          const icon      = eventIcon(e.type);
+
+          return (
+            <div key={i} style={{
+              display: 'flex', gap: 10, padding: isHalf || isFull ? '10px 16px' : '6px 16px',
+              background: isGoal ? (isMy ? 'rgba(0,232,122,0.06)' : 'rgba(255,59,92,0.06)') : isSpecial ? 'rgba(255,255,255,0.02)' : 'transparent',
+              borderLeft: isGoal
+                ? `3px solid ${isMy ? '#00e87a' : '#ff3b5c'}`
+                : isHalf || isFull ? '3px solid #f5c518' : '3px solid transparent',
+              borderBottom: isHalf || isFull ? '1px solid var(--border)' : 'none',
+              animation: 'fadeSlideIn 0.25s ease both',
+            }}>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 700, width: 26, flexShrink: 0, paddingTop: 1, color: isGoal ? (isMy ? '#00e87a' : '#ff3b5c') : isHalf || isFull ? '#f5c518' : 'var(--text-muted)' }}>
+                {isHalf || isFull ? icon : `${e.min}'`}
+              </span>
+              {icon && !isHalf && !isFull && (
+                <span style={{ fontSize: 12, flexShrink: 0 }}>{icon}</span>
+              )}
+              <span style={{ fontFamily: 'var(--font-body)', fontSize: 12, color: isGoal ? 'var(--text)' : isHalf || isFull ? 'var(--text-dim)' : isSpecial ? 'var(--text-dim)' : 'var(--text-muted)', lineHeight: 1.5, flex: 1 }}>
+                {e.text}
+              </span>
+            </div>
+          );
+        })}
+        {!events.length && (
+          <div style={{ padding: '30px 16px', fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-muted)', letterSpacing: 2, textTransform: 'uppercase' }}>
+            Match about to begin...
+          </div>
+        )}
+      </div>
+
+      {/* Actions */}
+      <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border)', background: 'var(--bg-1)' }}>
+        {isFinished ? (
+          <button onClick={onFinish} style={{
+            width: '100%', padding: 15, borderRadius: 8,
+            background: 'var(--green)', border: 'none', color: '#000',
+            fontFamily: 'var(--font-display)', fontSize: 16, fontWeight: 800,
+            letterSpacing: 1.5, cursor: 'pointer',
+          }}>VIEW MATCH REPORT</button>
+        ) : (
+          <button onClick={onSub} style={{
+            width: '100%', padding: 13, borderRadius: 8,
+            background: 'var(--bg-3)', border: '1px solid var(--border)', color: 'var(--text-dim)',
+            fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700,
+            letterSpacing: 1, cursor: 'pointer',
+          }}>Make Substitution</button>
+        )}
+      </div>
     </div>
   );
 }
 
-/* 3. POST MATCH */
-function PostMatch({ fixture, myGoals, oppGoals, squad, onContinue }) {
+/* helper outside component since myClub isn't accessible in LiveSim directly */
+let myClub = null;
+
+/* ═══════════════════════════════════════════════
+   POST MATCH
+═══════════════════════════════════════════════ */
+
+function PostMatch({ fixture, myGoals, oppGoals, squad, events, myXg, oppXg, lineup, onContinue }) {
+  const [confStep, setConfStep] = useState('none'); // none | questions | done
+  const [confQs] = useState(() => {
+    const result = myGoals > oppGoals ? 'W' : myGoals === oppGoals ? 'D' : 'L';
+    const pool = result === 'W' ? POST_QUESTIONS_WIN : POST_QUESTIONS_LOSS;
+    return [...pool].sort(() => Math.random() - 0.5).slice(0, 2).map(q => ({
+      ...q,
+      answers: [...q.answers].sort(() => Math.random() - 0.5),
+    }));
+  });
+  const [confIdx, setConfIdx] = useState(0);
+  const [confResult, setConfResult] = useState(null);
+  const [confBonus, setConfBonus] = useState({ morale: 0, rating: 0 });
+  const [confDone, setConfDone] = useState(false);
+
   const myName = fixture.isHome ? fixture.home : fixture.away;
   const oppName = fixture.isHome ? fixture.away : fixture.home;
   const result = myGoals > oppGoals ? 'W' : myGoals === oppGoals ? 'D' : 'L';
-  const resultColor = result === 'W' ? 'var(--green)' : result === 'D' ? 'var(--yellow)' : 'var(--red)';
+  const rc = result === 'W' ? '#00e87a' : result === 'D' ? '#f5c518' : '#ff3b5c';
   const resultLabel = result === 'W' ? 'Victory' : result === 'D' ? 'Draw' : 'Defeat';
-  const topPlayer = squad?.length ? [...squad].sort((a,b) => b.overall - a.overall)[0] : null;
 
-  const myShots = myGoals * 3 + Math.floor(Math.random()*5) + 2;
-  const oppShots = oppGoals * 3 + Math.floor(Math.random()*5) + 2;
-  const myPoss = Math.floor(40 + Math.random()*20);
+  // Generate player ratings from events
+  const playerRatings = useMemo(() => {
+    const base = lineup?.length ? lineup : (squad?.slice(0, 11) || []);
+    return base.map(p => {
+      let rating = 6.0 + Math.random() * 1.2;
+      // Bonus if they scored
+      const scored = events?.filter(e => e.type === 'goal' && e.side === 'my' && e.scorer === p.name.split(' ').pop()).length || 0;
+      rating += scored * 0.8;
+      // Random variance based on overall
+      rating += (p.overall - 75) / 30;
+      rating = Math.min(9.9, Math.max(5.0, rating));
+      return { ...p, matchRating: parseFloat(rating.toFixed(1)), goals: scored };
+    });
+  }, [lineup, squad, events]);
+
+  const motm = playerRatings.length ? [...playerRatings].sort((a, b) => b.matchRating - a.matchRating)[0] : null;
+
+  // Stats
+  const myShots = (myGoals * 3) + rnd(2, 6);
+  const oppShots = (oppGoals * 3) + rnd(2, 6);
+  const mySot = myGoals + rnd(1, 3);
+  const oppSot = oppGoals + rnd(1, 3);
+  const myPoss = rnd(38, 62);
   const oppPoss = 100 - myPoss;
+  const myFouls = rnd(6, 16);
+  const oppFouls = rnd(6, 16);
+  const myCorners = rnd(2, 8);
+  const oppCorners = rnd(2, 8);
+  const myYellows = events?.filter(e => e.type === 'yellow').length || rnd(0, 2);
+  const oppYellows = rnd(0, 2);
 
-  return (
-    <div style={{ padding:'16px', display:'flex', flexDirection:'column', gap:14 }}>
+  // Goal scorers
+  const scorers = events?.filter(e => e.type === 'goal' && e.side === 'my').map(e => ({
+    name: e.scorer || myName,
+    min: e.min,
+  })) || [];
 
-      {/* result hero */}
-      <div style={{
-        textAlign:'center', padding:'24px 16px',
-        background:`linear-gradient(135deg, ${resultColor === 'var(--green)' ? 'rgba(0,232,122,0.08)' : resultColor === 'var(--yellow)' ? 'rgba(245,197,24,0.08)' : 'rgba(255,59,92,0.08)'} 0%, var(--bg-3) 100%)`,
-        border:`1px solid ${resultColor === 'var(--green)' ? 'rgba(0,232,122,0.2)' : resultColor === 'var(--yellow)' ? 'rgba(245,197,24,0.2)' : 'rgba(255,59,92,0.2)'}`,
-        borderRadius:10,
-      }}>
-        <div style={{ fontFamily:'var(--font-display)', fontSize:13, color:'var(--text-muted)', letterSpacing:3, textTransform:'uppercase', marginBottom:8 }}>{resultLabel}</div>
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:16, marginBottom:8 }}>
-          <ClubBadgeMini name={fixture.home} size={40} />
-          <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-            <span style={{ fontFamily:'var(--font-display)', fontSize:52, fontWeight:900, color:'var(--text)', lineHeight:1 }}>{fixture.isHome ? myGoals : oppGoals}</span>
-            <span style={{ fontFamily:'var(--font-display)', fontSize:28, color:'var(--text-muted)' }}>–</span>
-            <span style={{ fontFamily:'var(--font-display)', fontSize:52, fontWeight:900, color:'var(--text)', lineHeight:1 }}>{fixture.isHome ? oppGoals : myGoals}</span>
-          </div>
-          <ClubBadgeMini name={fixture.away} size={40} />
-        </div>
-        <div style={{ display:'flex', justifyContent:'center', gap:8 }}>
-          <span style={{ fontFamily:'var(--font-display)', fontSize:11, color:'var(--text-muted)' }}>{fixture.home}</span>
-          <span style={{ fontFamily:'var(--font-mono)', fontSize:9, color:'var(--text-muted)' }}>vs</span>
-          <span style={{ fontFamily:'var(--font-display)', fontSize:11, color:'var(--text-muted)' }}>{fixture.away}</span>
-        </div>
-      </div>
+  function handleConfAnswer(ans) {
+    setConfResult({ good: ans.good });
+    const effect = confQs[confIdx].effect;
+    if (ans.good) setConfBonus(b => ({ morale: b.morale + effect.morale, rating: b.rating + effect.rating }));
+    else setConfBonus(b => ({ morale: b.morale + effect.morale, rating: b.rating + effect.rating }));
+    setTimeout(() => {
+      setConfResult(null);
+      if (confIdx + 1 >= confQs.length) setConfDone(true);
+      else setConfIdx(i => i + 1);
+    }, 1200);
+  }
 
-      {/* match stats */}
-      <Card>
-        <div style={{ padding:'12px 14px 4px', borderBottom:'1px solid var(--border)' }}>
-          <span style={{ fontFamily:'var(--font-mono)', fontSize:8, color:'var(--text-muted)', letterSpacing:3, textTransform:'uppercase' }}>Match Stats</span>
-        </div>
-        <div style={{ padding:'12px 14px', display:'flex', flexDirection:'column', gap:12 }}>
-          {[
-            ['Shots', myShots, oppShots],
-            ['Possession', `${myPoss}%`, `${oppPoss}%`],
-          ].map(([label, myVal, oppVal]) => (
-            <div key={label}>
-              <div style={{ display:'flex', justifyContent:'space-between', marginBottom:5 }}>
-                <span style={{ fontFamily:'var(--font-display)', fontSize:13, fontWeight:700, color:'var(--green)' }}>{myVal}</span>
-                <span style={{ fontFamily:'var(--font-mono)', fontSize:9, color:'var(--text-muted)', letterSpacing:1.5, textTransform:'uppercase', alignSelf:'center' }}>{label}</span>
-                <span style={{ fontFamily:'var(--font-display)', fontSize:13, fontWeight:700, color:'var(--red)' }}>{oppVal}</span>
-              </div>
-              {label === 'Possession' && (
-                <div style={{ height:4, background:'var(--bg-5)', borderRadius:2, overflow:'hidden', display:'flex' }}>
-                  <div style={{ width:`${myPoss}%`, background:'var(--green)', borderRadius:'2px 0 0 2px' }} />
-                  <div style={{ width:`${oppPoss}%`, background:'var(--red)', borderRadius:'0 2px 2px 0' }} />
-                </div>
-              )}
+  // Post-match conference overlay
+  if (confStep === 'questions') {
+    if (confDone) {
+      return (
+        <div style={{ minHeight: '100vh', background: 'var(--bg-1)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 20, padding: 32 }}>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 800, color: 'var(--text)' }}>Conference Complete</div>
+          <div style={{ display: 'flex', gap: 20 }}>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 900, color: confBonus.morale >= 0 ? '#00e87a' : '#ff3b5c' }}>{confBonus.morale >= 0 ? '+' : ''}{confBonus.morale}</div>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: 'var(--text-muted)', letterSpacing: 2, textTransform: 'uppercase' }}>Morale</div>
             </div>
+          </div>
+          <button onClick={onContinue} style={{ padding: '14px 40px', borderRadius: 8, background: '#00e87a', border: 'none', color: '#000', fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 800, letterSpacing: 1.5, cursor: 'pointer' }}>CONTINUE</button>
+        </div>
+      );
+    }
+
+    const q = confQs[confIdx];
+    return (
+      <div style={{ minHeight: '100vh', background: 'var(--bg-1)', display: 'flex', flexDirection: 'column', padding: 20, gap: 20 }}>
+        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: 'var(--text-muted)', letterSpacing: 3, textTransform: 'uppercase' }}>POST-MATCH CONFERENCE</div>
+        <div style={{ background: 'var(--bg-3)', border: '1px solid var(--border)', borderRadius: '0 10px 10px 10px', padding: '14px 16px' }}>
+          <div style={{ fontFamily: 'var(--font-body)', fontSize: 14, color: 'var(--text)', lineHeight: 1.5 }}>{q.q}</div>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {q.answers.map((ans, i) => (
+            <button key={i} onClick={() => { if (!confResult) handleConfAnswer(ans); }} style={{
+              padding: '12px 14px', borderRadius: 8, textAlign: 'left', cursor: confResult ? 'default' : 'pointer',
+              background: confResult ? (ans.good ? 'rgba(0,232,122,0.1)' : 'rgba(255,59,92,0.1)') : 'var(--bg-3)',
+              border: '1px solid var(--border)',
+            }}>
+              <span style={{ fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--text)' }}>{ans.text}</span>
+            </button>
           ))}
         </div>
-      </Card>
+      </div>
+    );
+  }
 
-      {/* top performer */}
-      {topPlayer && (
-        <Card>
-          <div style={{ padding:'12px 14px', display:'flex', alignItems:'center', gap:12 }}>
-            <div style={{ width:40, height:40, borderRadius:8, background:'var(--bg-4)', border:'1px solid var(--border)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, fontFamily:'var(--font-display)', fontSize:11, fontWeight:800, color:'var(--text-muted)' }}>
-              {topPlayer.name.split(' ').map(w=>w[0]).join('').slice(0,2)}
+  return (
+    <div style={{ minHeight: '100vh', background: 'var(--bg-1)', paddingBottom: 80 }}>
+      <style>{`@keyframes fadeSlideIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}`}</style>
+
+      {/* Result hero */}
+      <div style={{
+        padding: '28px 16px 20px',
+        background: `linear-gradient(180deg, ${rc}14 0%, transparent 100%)`,
+        borderBottom: `1px solid ${rc}22`,
+        textAlign: 'center',
+        animation: 'fadeSlideIn 0.4s ease',
+      }}>
+        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: rc, letterSpacing: 4, textTransform: 'uppercase', marginBottom: 10 }}>{resultLabel}</div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, marginBottom: 10 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+            <ClubBadge name={fixture.home} size={44} />
+            <span style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: 'var(--text-muted)' }}>{fixture.home}</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+            <span style={{ fontFamily: 'var(--font-display)', fontSize: 56, fontWeight: 900, color: 'var(--text)', lineHeight: 1 }}>{fixture.isHome ? myGoals : oppGoals}</span>
+            <span style={{ fontFamily: 'var(--font-display)', fontSize: 30, color: 'var(--text-muted)' }}>–</span>
+            <span style={{ fontFamily: 'var(--font-display)', fontSize: 56, fontWeight: 900, color: 'var(--text)', lineHeight: 1 }}>{fixture.isHome ? oppGoals : myGoals}</span>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+            <ClubBadge name={fixture.away} size={44} />
+            <span style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: 'var(--text-muted)' }}>{fixture.away}</span>
+          </div>
+        </div>
+
+        {/* Scorers */}
+        {scorers.length > 0 && (
+          <div style={{ display: 'flex', justifyContent: 'center', gap: 12, flexWrap: 'wrap' }}>
+            {scorers.map((s, i) => (
+              <span key={i} style={{ fontFamily: 'var(--font-body)', fontSize: 12, color: 'var(--text-dim)' }}>
+                ⚽ {s.name} <span style={{ color: 'var(--text-muted)' }}>{s.min}'</span>
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+
+        {/* Full Stats */}
+        <div style={{ background: 'var(--bg-3)', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
+          <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)' }}>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: 'var(--text-muted)', letterSpacing: 3, textTransform: 'uppercase' }}>Match Stats</span>
+          </div>
+          <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {[
+              ['Shots', myShots, oppShots],
+              ['On Target', mySot, oppSot],
+              ['Possession', `${myPoss}%`, `${oppPoss}%`],
+              ['xG', myXg?.toFixed(2) || '—', oppXg?.toFixed(2) || '—'],
+              ['Fouls', myFouls, oppFouls],
+              ['Corners', myCorners, oppCorners],
+              ['Yellows', myYellows, oppYellows],
+            ].map(([label, myVal, oppVal]) => (
+              <div key={label} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700, color: '#00e87a', width: 40 }}>{myVal}</span>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: 'var(--text-muted)', letterSpacing: 1.5, textTransform: 'uppercase', flex: 1, textAlign: 'center' }}>{label}</span>
+                <span style={{ fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700, color: 'var(--text-muted)', width: 40, textAlign: 'right' }}>{oppVal}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* MOTM */}
+        {motm && (
+          <div style={{ background: 'linear-gradient(135deg, rgba(245,197,24,0.1) 0%, var(--bg-3) 100%)', border: '1px solid rgba(245,197,24,0.3)', borderRadius: 10, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ width: 44, height: 44, borderRadius: 10, background: 'var(--bg-4)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 800, color: '#f5c518' }}>
+              {motm.name.split(' ').map(w => w[0]).join('').slice(0, 2)}
             </div>
-            <div style={{ flex:1 }}>
-              <div style={{ fontFamily:'var(--font-display)', fontSize:14, fontWeight:700, color:'var(--text)' }}>{topPlayer.name}</div>
-              <div style={{ fontFamily:'var(--font-mono)', fontSize:9, color:'var(--text-muted)', letterSpacing:1.5, textTransform:'uppercase', marginTop:2 }}>Man of the Match</div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>{motm.name}</div>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: '#f5c518', letterSpacing: 2, textTransform: 'uppercase', marginTop: 2 }}>Man of the Match</div>
             </div>
-            <div style={{ textAlign:'center' }}>
-              <div style={{ fontFamily:'var(--font-display)', fontSize:28, fontWeight:900, color:'var(--yellow)', lineHeight:1 }}>{topPlayer.overall}</div>
-              <div style={{ fontFamily:'var(--font-mono)', fontSize:8, color:'var(--text-muted)', letterSpacing:1.5 }}>OVR</div>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: 30, fontWeight: 900, color: '#f5c518', lineHeight: 1 }}>{motm.matchRating}</div>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 7, color: 'var(--text-muted)', letterSpacing: 1.5 }}>RATING</div>
             </div>
           </div>
-        </Card>
-      )}
+        )}
 
-      <button onClick={onContinue} style={{
-        width:'100%', padding:'16px', borderRadius:8,
-        background:'var(--green)', border:'none', color:'#000',
-        fontFamily:'var(--font-display)', fontSize:16, fontWeight:800,
-        letterSpacing:1.5, cursor:'pointer',
-      }}>
-        CONTINUE
-      </button>
+        {/* Player Ratings */}
+        <div style={{ background: 'var(--bg-3)', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
+          <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)' }}>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: 'var(--text-muted)', letterSpacing: 3, textTransform: 'uppercase' }}>Player Ratings</span>
+          </div>
+          {playerRatings.map((p, i) => {
+            const ratingColor = p.matchRating >= 7.5 ? '#00e87a' : p.matchRating >= 6.5 ? '#f5c518' : '#ff3b5c';
+            return (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 14px', borderBottom: i < playerRatings.length - 1 ? '1px solid var(--border)' : 'none' }}>
+                <span style={{ fontFamily: 'var(--font-body)', fontSize: 12, color: 'var(--text)', flex: 1 }}>{p.name}</span>
+                {p.goals > 0 && <span style={{ fontSize: 11 }}>{'⚽'.repeat(p.goals)}</span>}
+                <span style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 800, color: ratingColor, width: 32, textAlign: 'right' }}>{p.matchRating}</span>
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Actions */}
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button onClick={() => setConfStep('questions')} style={{
+            flex: 1, padding: 13, borderRadius: 8,
+            background: 'var(--bg-3)', border: '1px solid var(--border)',
+            color: 'var(--text-dim)', fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700,
+            letterSpacing: 1, cursor: 'pointer',
+          }}>POST CONFERENCE</button>
+          <button onClick={onContinue} style={{
+            flex: 1, padding: 13, borderRadius: 8,
+            background: 'var(--green)', border: 'none', color: '#000',
+            fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 800,
+            letterSpacing: 1.5, cursor: 'pointer',
+          }}>CONTINUE</button>
+        </div>
+      </div>
     </div>
   );
 }
 
-/* ─────────────────────────────────────────
+/* ═══════════════════════════════════════════════
    MAIN COMPONENT
-───────────────────────────────────────── */
-export default function Matchday() {
-  const { myClub, squad, allClubs, formation, week, season, results, addResult, advanceWeek } = useGameStore();
+═══════════════════════════════════════════════ */
 
-  const [tab, setTab] = useState('calendar');
+export default function Matchday() {
+  const store = useGameStore();
+  const { squad, allClubs, formation: storeFormation, week, season, results, addResult, advanceWeek } = store;
+  myClub = store.myClub; // make accessible to LiveSim
+
+  const [tab, setTab] = useState('preview');
   const [screen, setScreen] = useState('calendar'); // calendar | prematch | livesim | postmatch
   const [activeFixture, setActiveFixture] = useState(null);
-  const [talkBonus, setTalkBonus] = useState(0);
   const [simEvents, setSimEvents] = useState([]);
   const [simMinute, setSimMinute] = useState(0);
   const [simFinished, setSimFinished] = useState(false);
   const [myGoals, setMyGoals] = useState(0);
   const [oppGoals, setOppGoals] = useState(0);
+  const [myXg, setMyXg] = useState(0);
+  const [oppXg, setOppXg] = useState(0);
+  const [simSpeed, setSimSpeed] = useState(1);
+  const [currentDay, setCurrentDay] = useState(1);
+  const [matchLineup, setMatchLineup] = useState([]);
   const simRef = useRef(null);
+  const speedRef = useRef(1);
 
-  /* generate fixtures once per club/season */
+  // Generate fixtures
   const fixtures = useMemo(() => {
     if (!myClub || !allClubs) return [];
     return generateFixtures(myClub, allClubs, season);
   }, [myClub, allClubs, season]);
 
-  /* mark played fixtures from results */
   const playedIds = useMemo(() => new Set(results.map(r => r.fixtureId)), [results]);
-
-  const myRating = useMemo(() => getTeamRating(squad), [squad]);
+  const myRating  = useMemo(() => getTeamRating(squad), [squad]);
 
   const upcomingFixtures = fixtures.filter(f => !playedIds.has(f.id));
-  const playedFixtures   = fixtures.filter(f => playedIds.has(f.id));
+  const nextFixture      = upcomingFixtures[0] || null;
 
-  /* ── Start match sim ── */
-  function handleKickOff(bonus) {
-    setTalkBonus(bonus);
-    const oppName = activeFixture.isHome ? activeFixture.away : activeFixture.home;
+  function getOppRating(fixture) {
+    if (!fixture) return 72;
+    const oppName = fixture.isHome ? fixture.away : fixture.home;
     const oppClub = allClubs?.find(c => c.name === oppName);
-    const oppPlayers = squad ? [] : []; // we don't have opp squad, use club rating proxy
-    const oppRatingVal = oppClub ? Math.min(90, Math.max(60, 70 + (oppClub.budget || 0) / 20000000)) : 72;
+    return oppClub ? Math.round(Math.min(90, Math.max(60, 70 + (oppClub.budget || 0) / 20000000))) : 72;
+  }
 
-    const myAtt  = myRating + bonus;
-    const myDef  = myRating - 2;
-    const oppAtt = oppRatingVal;
-    const oppDef = oppRatingVal - 2;
+  function handleDayTap(day, fixture) {
+    if (day > currentDay) {
+      // Advance to that day
+      setCurrentDay(day);
+    }
+    if (fixture && !playedIds.has(fixture.id)) {
+      setActiveFixture(fixture);
+      setScreen('prematch');
+    }
+  }
 
-    const mg = simulateGoals(myAtt, oppDef, 0);
-    const og = simulateGoals(oppAtt, myDef, 0);
+  function handlePlayFromPreview() {
+    if (nextFixture) {
+      setActiveFixture(nextFixture);
+      setScreen('prematch');
+    }
+  }
 
-    setMyGoals(mg);
-    setOppGoals(og);
+  function handleKickOff({ talkBonus, tacticsMod, confBonus, lineup, formation }) {
+    setMatchLineup(lineup || []);
+    const oppRating = getOppRating(activeFixture);
+    const oppName   = activeFixture.isHome ? activeFixture.away : activeFixture.home;
 
-    const commentary = generateCommentary(mg, og, myClub.name, oppName, squad);
+    const result = simulateFullMatch(myRating, oppRating, talkBonus, tacticsMod, activeFixture.isHome);
+    setMyGoals(result.myGoals);
+    setOppGoals(result.oppGoals);
+    setMyXg(result.myXg);
+    setOppXg(result.oppXg);
+
+    const commentary = buildCommentary(result.myGoals, result.oppGoals, myClub.name, oppName, squad);
     setSimEvents([]);
     setSimMinute(0);
     setSimFinished(false);
     setScreen('livesim');
 
-    /* stream events with delays */
     let i = 0;
-    simRef.current = setInterval(() => {
-      if (i >= commentary.length) {
-        clearInterval(simRef.current);
-        setSimFinished(true);
-        return;
-      }
-      const ev = commentary[i];
-      setSimEvents(prev => [...prev, ev]);
-      setSimMinute(ev.min);
-      i++;
-    }, 600);
+    speedRef.current = 1;
+
+    function tick() {
+      clearInterval(simRef.current);
+      simRef.current = setInterval(() => {
+        if (i >= commentary.length) {
+          clearInterval(simRef.current);
+          setSimFinished(true);
+          return;
+        }
+        const ev = commentary[i];
+        setSimEvents(prev => [...prev, ev]);
+        setSimMinute(ev.min);
+        i++;
+      }, Math.round(700 / speedRef.current));
+    }
+    tick();
   }
 
-  useEffect(() => () => clearInterval(simRef.current), []);
+  function handleSpeedChange(s) {
+    setSimSpeed(s);
+    speedRef.current = s;
+    // Restart ticker at new speed
+    let i = simEvents.length;
+    clearInterval(simRef.current);
+    // Continue from current position
+    const commentary = simEvents; // already have played events, but we need full
+    // Simple approach: just change interval
+    simRef.current = setInterval(() => {
+      setSimFinished(prev => {
+        if (prev) { clearInterval(simRef.current); return true; }
+        return prev;
+      });
+    }, Math.round(700 / s));
+  }
 
-  function handleFinish() { setScreen('postmatch'); }
+  function handleFinish() {
+    clearInterval(simRef.current);
+    setSimFinished(true);
+    setScreen('postmatch');
+  }
 
   function handleContinue() {
-    const result = {
+    const oppName = activeFixture.isHome ? activeFixture.away : activeFixture.home;
+    const scorers = simEvents
+      .filter(e => e.type === 'goal' && e.side === 'my')
+      .map(e => ({ name: e.scorer || myClub.name, min: e.min }));
+
+    addResult({
       fixtureId: activeFixture.id,
       week: activeFixture.week,
       competition: activeFixture.competition,
       isHome: activeFixture.isHome,
-      opponent: activeFixture.isHome ? activeFixture.away : activeFixture.home,
+      opponent: oppName,
       homeGoals: activeFixture.isHome ? myGoals : oppGoals,
       awayGoals: activeFixture.isHome ? oppGoals : myGoals,
       myGoals,
       oppGoals,
-    };
-    addResult(result);
+      scorers,
+    });
     advanceWeek();
+
+    // Advance calendar to next fixture day
+    const next = upcomingFixtures.find(f => !playedIds.has(f.id) && f.id !== activeFixture.id);
+    if (next) setCurrentDay(next.day);
+
     setScreen('calendar');
     setActiveFixture(null);
     setSimEvents([]);
   }
 
-  function handlePlay(fixture) {
-    setActiveFixture(fixture);
-    setScreen('prematch');
-  }
+  useEffect(() => () => clearInterval(simRef.current), []);
 
-  const oppRatingForFixture = (fixture) => {
-    const oppName = fixture.isHome ? fixture.away : fixture.home;
-    const oppClub = allClubs?.find(c => c.name === oppName);
-    return oppClub ? Math.round(Math.min(90, Math.max(60, 70 + (oppClub.budget||0)/20000000))) : 72;
-  };
-
-  /* ── RENDER ── */
+  /* ── PRE-MATCH ── */
   if (screen === 'prematch' && activeFixture) {
     return (
-      <div style={{ minHeight:'100vh', background:'var(--bg-1)', paddingBottom:80 }}>
-        <PreMatch
+      <>
+        <style>{`@keyframes fadeSlideIn{from{opacity:0;transform:translateX(-6px)}to{opacity:1;transform:translateX(0)}} @keyframes fadeIn{from{opacity:0}to{opacity:1}}`}</style>
+        <PreMatchFlow
           fixture={activeFixture}
           myClub={myClub}
           myRating={myRating}
-          oppRating={oppRatingForFixture(activeFixture)}
+          oppRating={getOppRating(activeFixture)}
+          squad={squad}
           onKickOff={handleKickOff}
           onBack={() => setScreen('calendar')}
         />
-      </div>
+      </>
     );
   }
 
+  /* ── LIVE SIM ── */
   if (screen === 'livesim' && activeFixture) {
     return (
-      <div style={{ minHeight:'100vh', background:'var(--bg-1)', paddingBottom:80 }}>
+      <>
+        <style>{`@keyframes fadeSlideIn{from{opacity:0;transform:translateX(-6px)}to{opacity:1;transform:translateX(0)}}`}</style>
         <LiveSim
           fixture={activeFixture}
           myGoals={myGoals}
@@ -666,140 +1791,83 @@ export default function Matchday() {
           events={simEvents}
           minute={simMinute}
           isFinished={simFinished}
+          squad={squad}
           onSub={() => {}}
           onFinish={handleFinish}
+          speed={simSpeed}
+          onSpeedChange={handleSpeedChange}
         />
-      </div>
+      </>
     );
   }
 
+  /* ── POST MATCH ── */
   if (screen === 'postmatch' && activeFixture) {
     return (
-      <div style={{ minHeight:'100vh', background:'var(--bg-1)', paddingBottom:80 }}>
+      <>
+        <style>{`@keyframes fadeSlideIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}`}</style>
         <PostMatch
           fixture={activeFixture}
           myGoals={myGoals}
           oppGoals={oppGoals}
           squad={squad}
+          events={simEvents}
+          myXg={myXg}
+          oppXg={oppXg}
+          lineup={matchLineup}
           onContinue={handleContinue}
         />
-      </div>
+      </>
     );
   }
 
-  /* ── CALENDAR ── */
+  /* ── CALENDAR VIEW ── */
   return (
     <>
       <style>{`
         @keyframes fadeSlideIn { from{opacity:0;transform:translateX(-6px)} to{opacity:1;transform:translateX(0)} }
-        .fix-card { display:flex; align-items:center; gap:10px; padding:12px 16px; border-bottom:1px solid var(--border); transition:background 0.12s; }
-        .play-btn { background:var(--green); border:none; color:#000; font-family:var(--font-display); font-size:11px; font-weight:800; padding:7px 14px; border-radius:6px; cursor:pointer; letter-spacing:1; white-space:nowrap; -webkit-tap-highlight-color:transparent; flex-shrink:0; }
-        .sim-btn  { background:var(--bg-4); border:1px solid var(--border); color:var(--text-muted); font-family:var(--font-display); font-size:11px; font-weight:700; padding:7px 12px; border-radius:6px; cursor:pointer; letter-spacing:0.5; white-space:nowrap; flex-shrink:0; }
-        .section-label { padding:10px 16px 6px; font-family:var(--font-mono); font-size:8px; color:var(--text-muted); letter-spacing:3px; text-transform:uppercase; background:var(--bg-2); border-bottom:1px solid var(--border); border-top:1px solid var(--border); }
+        * { -webkit-tap-highlight-color: transparent; }
       `}</style>
 
-      <div style={{ minHeight:'100vh', background:'var(--bg-1)', paddingBottom:80 }}>
+      <div style={{ minHeight: '100vh', background: 'var(--bg-1)', paddingBottom: 80 }}>
 
-        {/* tab bar */}
-        <div style={{ display:'flex', borderBottom:'1px solid var(--border)', background:'var(--bg-1)', position:'sticky', top:52, zIndex:10 }}>
-          {['calendar','results'].map(t => (
+        {/* Day Calendar Strip */}
+        <CalendarStrip
+          fixtures={fixtures}
+          currentDay={currentDay}
+          onDayTap={handleDayTap}
+          playedIds={playedIds}
+        />
+
+        {/* Tab bar */}
+        <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', background: 'var(--bg-1)', position: 'sticky', top: 52 + 68, zIndex: 9 }}>
+          {['preview', 'results'].map(t => (
             <button key={t} onClick={() => setTab(t)} style={{
-              flex:1, padding:'12px', background:'none', border:'none',
-              borderBottom: tab===t ? '2px solid var(--green)' : '2px solid transparent',
-              color: tab===t ? 'var(--green)' : 'var(--text-muted)',
-              fontFamily:'var(--font-mono)', fontSize:9, letterSpacing:2, textTransform:'uppercase',
-              cursor:'pointer', transition:'all 0.15s',
-            }}>{t}</button>
+              flex: 1, padding: '11px', background: 'none', border: 'none',
+              borderBottom: tab === t ? '2px solid var(--green)' : '2px solid transparent',
+              color: tab === t ? 'var(--green)' : 'var(--text-muted)',
+              fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: 2.5, textTransform: 'uppercase',
+              cursor: 'pointer', transition: 'all 0.15s',
+            }}>
+              {t === 'preview' ? 'Preview' : 'Results'}
+            </button>
           ))}
         </div>
 
-        {/* season header */}
-        <div style={{ padding:'12px 16px', display:'flex', alignItems:'center', justifyContent:'space-between', borderBottom:'1px solid var(--border)' }}>
-          <div>
-            <div style={{ fontFamily:'var(--font-display)', fontSize:20, fontWeight:900, color:'var(--text)', letterSpacing:0.5 }}>Season {season}</div>
-            <div style={{ fontFamily:'var(--font-mono)', fontSize:9, color:'var(--text-muted)', letterSpacing:2, textTransform:'uppercase', marginTop:2 }}>{myClub?.league} · {fixtures.length} fixtures</div>
-          </div>
-          <div style={{ textAlign:'right' }}>
-            <div style={{ fontFamily:'var(--font-display)', fontSize:22, fontWeight:900, color:'var(--green)' }}>W{week}</div>
-            <div style={{ fontFamily:'var(--font-mono)', fontSize:8, color:'var(--text-muted)', letterSpacing:2, textTransform:'uppercase' }}>Current Week</div>
-          </div>
-        </div>
-
-        {/* CALENDAR TAB */}
-        {tab === 'calendar' && (
-          <div>
-            {upcomingFixtures.length === 0 && (
-              <div style={{ padding:'40px 16px', textAlign:'center', fontFamily:'var(--font-mono)', fontSize:10, color:'var(--text-muted)', letterSpacing:2, textTransform:'uppercase' }}>
-                Season complete
-              </div>
-            )}
-
-            {upcomingFixtures.map((fixture, i) => {
-              const isNext = i === 0;
-              return (
-                <div key={fixture.id} className="fix-card" style={{ background: isNext ? 'rgba(0,232,122,0.03)' : 'transparent', borderLeft: isNext ? '2px solid var(--green)' : '2px solid transparent' }}>
-                  <div style={{ display:'flex', flexDirection:'column', gap:2, width:28, flexShrink:0, alignItems:'center' }}>
-                    <span style={{ fontFamily:'var(--font-mono)', fontSize:8, color: isNext ? 'var(--green)' : 'var(--text-muted)', letterSpacing:1.5, textTransform:'uppercase' }}>W{fixture.week}</span>
-                    <CompBadge competition={fixture.competition} />
-                  </div>
-
-                  <div style={{ flex:1, display:'flex', alignItems:'center', gap:8, minWidth:0 }}>
-                    <ClubBadgeMini name={fixture.home} size={24} />
-                    <div style={{ flex:1, minWidth:0 }}>
-                      <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-                        <span style={{ fontFamily:'var(--font-display)', fontSize:12, fontWeight:700, color: fixture.isHome ? 'var(--text)' : 'var(--text-dim)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', maxWidth:80 }}>{fixture.home}</span>
-                        <span style={{ fontFamily:'var(--font-mono)', fontSize:8, color:'var(--text-muted)' }}>vs</span>
-                        <span style={{ fontFamily:'var(--font-display)', fontSize:12, fontWeight:700, color: !fixture.isHome ? 'var(--text)' : 'var(--text-dim)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis', maxWidth:80 }}>{fixture.away}</span>
-                      </div>
-                      <div style={{ fontFamily:'var(--font-mono)', fontSize:8, color:'var(--text-muted)', letterSpacing:1, marginTop:2 }}>
-                        {fixture.isHome ? 'Home' : 'Away'}{fixture.cupRound ? ` · ${fixture.cupRound}` : ''}
-                      </div>
-                    </div>
-                    <ClubBadgeMini name={fixture.away} size={24} />
-                  </div>
-
-                  {isNext ? (
-                    <button className="play-btn" onClick={() => handlePlay(fixture)}>PLAY</button>
-                  ) : (
-                    <button className="sim-btn" onClick={() => handlePlay(fixture)}>SIM</button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+        {/* Tab content */}
+        {tab === 'preview' && (
+          <PreviewTab
+            nextFixture={nextFixture}
+            myClub={myClub}
+            myRating={myRating}
+            oppRating={getOppRating(nextFixture)}
+            onPlay={handlePlayFromPreview}
+            results={results}
+          />
         )}
 
-        {/* RESULTS TAB */}
         {tab === 'results' && (
-          <div>
-            {results.length === 0 && (
-              <div style={{ padding:'40px 16px', textAlign:'center', fontFamily:'var(--font-mono)', fontSize:10, color:'var(--text-muted)', letterSpacing:2, textTransform:'uppercase' }}>
-                No results yet
-              </div>
-            )}
-            {[...results].reverse().map((r, i) => {
-              const result = r.myGoals > r.oppGoals ? 'W' : r.myGoals === r.oppGoals ? 'D' : 'L';
-              const rc = result === 'W' ? 'var(--green)' : result === 'D' ? 'var(--yellow)' : 'var(--red)';
-              return (
-                <div key={i} className="fix-card">
-                  <div style={{ width:20, height:20, borderRadius:4, background: result==='W'?'rgba(0,232,122,0.12)':result==='D'?'rgba(245,197,24,0.12)':'rgba(255,59,92,0.12)', border:`1px solid ${rc}44`, display:'flex', alignItems:'center', justifyContent:'center', fontFamily:'var(--font-display)', fontSize:11, fontWeight:800, color:rc, flexShrink:0 }}>{result}</div>
-                  <div style={{ flex:1, minWidth:0 }}>
-                    <div style={{ fontFamily:'var(--font-body)', fontSize:12, fontWeight:600, color:'var(--text)', whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
-                      vs {r.opponent}
-                    </div>
-                    <div style={{ fontFamily:'var(--font-mono)', fontSize:8, color:'var(--text-muted)', letterSpacing:1.5, textTransform:'uppercase', marginTop:2 }}>
-                      W{r.week} · {r.competition}
-                    </div>
-                  </div>
-                  <div style={{ display:'flex', alignItems:'center', gap:6, flexShrink:0 }}>
-                    <span style={{ fontFamily:'var(--font-display)', fontSize:20, fontWeight:900, color:'var(--text)' }}>{r.homeGoals}</span>
-                    <span style={{ fontFamily:'var(--font-mono)', fontSize:10, color:'var(--text-muted)' }}>–</span>
-                    <span style={{ fontFamily:'var(--font-display)', fontSize:20, fontWeight:900, color:'var(--text)' }}>{r.awayGoals}</span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          <ResultsTab results={results} fixtures={fixtures} />
         )}
       </div>
     </>
