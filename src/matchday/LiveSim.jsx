@@ -1,40 +1,38 @@
 /* ═══════════════════════════════════════════════════════
    THE GAFFER — LiveSim.jsx
    Live match simulation screen.
-
    Props:
      fixture       – { id, home, away, isHome, competition }
      myClubName    – string
-     events        – array of event objects (grows over time)
-     minute        – current minute (0–90)
+     myGoals       – number (live, driven by streamed events in Matchday)
+     oppGoals      – number
+     events        – event array (grows as match streams)
+     minute        – current minute
      isFinished    – bool
      squad         – full squad array
-     lineup        – starting 11 array
+     lineup        – starting 11
      speed         – 1 | 2 | 5
      onSpeedChange – fn(speed)
-     onFinish      – fn() — called when "View Match Report" is tapped
-     onSub         – fn(outPlayer, inPlayer)
+     onFinish      – fn()
+     onSub         – fn(out, in)
 ═══════════════════════════════════════════════════════ */
-
 import { useState, useEffect, useRef } from 'react';
 
-/* ─── Competition config ─── */
 const COMP = {
-  'Premier League':   { color: '#3d0064', accent: '#a855f7' },
-  'La Liga':          { color: '#c2410c', accent: '#f97316' },
-  'Bundesliga':       { color: '#d20515', accent: '#ef4444' },
-  'Serie A':          { color: '#1a1a6b', accent: '#6366f1' },
-  'Ligue 1':          { color: '#001f5f', accent: '#3b82f6' },
-  'Champions League': { color: '#1a3a6b', accent: '#fbbf24' },
-  'Europa League':    { color: '#c05000', accent: '#fb923c' },
-  'Conference League':{ color: '#0a5c36', accent: '#34d399' },
-  'FA Cup':           { color: '#003087', accent: '#60a5fa' },
-  'Carabao Cup':      { color: '#003087', accent: '#4ade80' },
-  'Cup':              { color: '#c9a227', accent: '#fbbf24' },
+  'Premier League':    { color: '#3d0064', accent: '#a855f7' },
+  'La Liga':           { color: '#c2410c', accent: '#f97316' },
+  'Bundesliga':        { color: '#d20515', accent: '#ef4444' },
+  'Serie A':           { color: '#1a1a6b', accent: '#6366f1' },
+  'Ligue 1':           { color: '#001f5f', accent: '#3b82f6' },
+  'Champions League':  { color: '#1a3a6b', accent: '#fbbf24' },
+  'Europa League':     { color: '#7c2d12', accent: '#fb923c' },
+  'Conference League': { color: '#0a5c36', accent: '#34d399' },
+  'FA Cup':            { color: '#003087', accent: '#60a5fa' },
+  'Carabao Cup':       { color: '#003087', accent: '#4ade80' },
+  'Cup':               { color: '#c9a227', accent: '#fbbf24' },
 };
 const getComp = n => COMP[n] || { color: '#1a1a1a', accent: '#555' };
 
-/* ─── Club colours ─── */
 const CLUB_COLOR = {
   'Real Madrid':'#FEBE10','Barcelona':'#A50044','Manchester City':'#6CABDD',
   'Liverpool':'#C8102E','Arsenal':'#EF0107','Chelsea':'#034694',
@@ -45,167 +43,182 @@ const CLUB_COLOR = {
   'Borussia Dortmund':'#FDE100','Juventus':'#555',
 };
 
+/* SVG badges — clean renders */
 const CLUB_BADGE = {
-  'Manchester City':   'https://resources.premierleague.com/premierleague/badges/50/t43.png',
-  'Liverpool':         'https://resources.premierleague.com/premierleague/badges/50/t14.png',
-  'Arsenal':           'https://resources.premierleague.com/premierleague/badges/50/t3.png',
-  'Chelsea':           'https://resources.premierleague.com/premierleague/badges/50/t8.png',
-  'Manchester United': 'https://resources.premierleague.com/premierleague/badges/50/t1.png',
-  'Tottenham':         'https://resources.premierleague.com/premierleague/badges/50/t6.png',
-  'Aston Villa':       'https://resources.premierleague.com/premierleague/badges/50/t7.png',
-  'Brighton':          'https://resources.premierleague.com/premierleague/badges/50/t36.png',
+  'Manchester City':   'https://upload.wikimedia.org/wikipedia/en/e/eb/Manchester_City_FC_badge.svg',
+  'Liverpool':         'https://upload.wikimedia.org/wikipedia/en/0/0c/Liverpool_FC.svg',
+  'Arsenal':           'https://upload.wikimedia.org/wikipedia/en/5/53/Arsenal_FC.svg',
+  'Chelsea':           'https://upload.wikimedia.org/wikipedia/en/c/cc/Chelsea_FC.svg',
+  'Manchester United': 'https://upload.wikimedia.org/wikipedia/en/7/7a/Manchester_United_FC_crest.svg',
+  'Tottenham':         'https://upload.wikimedia.org/wikipedia/en/b/b4/Tottenham_Hotspur.svg',
+  'Aston Villa':       'https://upload.wikimedia.org/wikipedia/en/9/9f/Aston_Villa_FC_new_crest.svg',
+  'Brighton':          'https://upload.wikimedia.org/wikipedia/en/f/fd/Brighton_%26_Hove_Albion_FC_logo.svg',
+  'Bayern Munich':     'https://upload.wikimedia.org/wikipedia/commons/1/1b/FC_Bayern_M%C3%BCnchen_logo_%282017%29.svg',
+  'Real Madrid':       'https://upload.wikimedia.org/wikipedia/en/5/56/Real_Madrid_CF.svg',
+  'Barcelona':         'https://upload.wikimedia.org/wikipedia/en/4/47/FC_Barcelona_%28crest%29.svg',
+  'PSG':               'https://upload.wikimedia.org/wikipedia/en/a/a7/Paris_Saint-Germain_F.C..svg',
+  'AC Milan':          'https://upload.wikimedia.org/wikipedia/commons/d/d0/Logo_of_AC_Milan.svg',
+  'Inter Milan':       'https://upload.wikimedia.org/wikipedia/commons/0/05/FC_Internazionale_Milano_2021.svg',
+  'Juventus':          'https://upload.wikimedia.org/wikipedia/commons/1/15/Juventus_FC_2017_icon_%28black%29.svg',
+  'Atletico Madrid':   'https://upload.wikimedia.org/wikipedia/en/f/f4/Atletico_Madrid_2017_logo.svg',
+  'Borussia Dortmund': 'https://upload.wikimedia.org/wikipedia/commons/6/67/Borussia_Dortmund_logo.svg',
+  'Bayer Leverkusen':  'https://upload.wikimedia.org/wikipedia/en/5/59/Bayer_04_Leverkusen_logo.svg',
 };
 
 function ClubBadge({ name, size = 32 }) {
   const [failed, setFailed] = useState(false);
   const url = CLUB_BADGE[name];
-  const color = CLUB_COLOR[name] || '#555';
-  const abbr = (name || '?').slice(0, 3).toUpperCase();
+  const color = CLUB_COLOR[name] || '#888';
+  const abbr = name?.slice(0, 3).toUpperCase() || '?';
   if (url && !failed) {
-    return (
-      <img src={url} alt={name} onError={() => setFailed(true)}
-        style={{ width: size, height: size, objectFit: 'contain', flexShrink: 0 }} />
-    );
+    return <img src={url} alt={name} onError={() => setFailed(true)}
+      style={{ width: size, height: size, objectFit: 'contain', flexShrink: 0 }} />;
   }
   return (
     <div style={{
       width: size, height: size, borderRadius: 6, flexShrink: 0,
-      background: `${color}22`, border: `1.5px solid ${color}55`,
+      background: `${color}22`, border: `1.5px solid ${color}44`,
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      fontFamily: 'var(--font-display)', fontSize: size * 0.28,
-      color, letterSpacing: 0.5, fontWeight: 700,
+      fontFamily: 'var(--font-display)', fontSize: size * 0.28, color, letterSpacing: 0.5,
     }}>{abbr}</div>
   );
 }
 
-/* ─── SVG event icons (no emojis) ─── */
+/* ─── Event icon map (no emojis for non-goal events in pro UI, but keeping minimal set) ─── */
 function EventIcon({ type }) {
-  const s = { width: 13, height: 13, flexShrink: 0 };
-
-  if (type === 'goal') return (
-    <svg {...s} viewBox="0 0 24 24" fill="none" stroke="#00e87a" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="10"/>
-      <path d="M12 8v4l2.5 2.5"/>
-    </svg>
-  );
-  if (type === 'goalOpp') return (
-    <svg {...s} viewBox="0 0 24 24" fill="none" stroke="#ff3b5c" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="10"/>
-      <path d="M12 8v4l2.5 2.5"/>
-    </svg>
-  );
-  if (type === 'yellowCard') return (
-    <div style={{ width: 9, height: 12, background: '#f5c518', borderRadius: 2, flexShrink: 0 }} />
-  );
-  if (type === 'yellowOpp') return (
-    <div style={{ width: 9, height: 12, background: '#f5c518', borderRadius: 2, flexShrink: 0, opacity: 0.7 }} />
-  );
-  if (type === 'redCard' || type === 'redCardOpp') return (
-    <div style={{ width: 9, height: 12, background: '#ff3b5c', borderRadius: 2, flexShrink: 0 }} />
-  );
-  if (type === 'injury') return (
-    <svg {...s} viewBox="0 0 24 24" fill="none" stroke="#f97316" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 2v10M12 16v6M4.93 4.93l7.07 7.07M16 16l4 4M2 12h10M16 12h6"/>
-    </svg>
-  );
-  if (type === 'wonderSave') return (
-    <svg {...s} viewBox="0 0 24 24" fill="none" stroke="#60a5fa" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-    </svg>
-  );
-  if (type === 'var') return (
-    <svg {...s} viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="2" y="3" width="20" height="14" rx="2"/>
-      <path d="M8 21h8M12 17v4"/>
-    </svg>
-  );
-  if (type === 'penalty') return (
-    <svg {...s} viewBox="0 0 24 24" fill="none" stroke="#a855f7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="10"/>
-      <circle cx="12" cy="12" r="3" fill="#a855f7" fillOpacity="0.3"/>
-    </svg>
-  );
-  if (type === 'miss' || type === 'missOpp') return (
-    <svg {...s} viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
-    </svg>
-  );
+  const style = { width: 14, height: 14, flexShrink: 0, marginTop: 1 };
+  if (type === 'goal' || type === 'oppGoal') {
+    return (
+      <svg {...style} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="10"/><path d="M12 8v4l3 3"/>
+      </svg>
+    );
+  }
+  if (type === 'yellowCard' || type === 'yellowOpp') {
+    return <div style={{ width: 8, height: 11, background: '#f5c518', borderRadius: 2, flexShrink: 0, marginTop: 2 }} />;
+  }
+  if (type === 'redCard' || type === 'redCardOpp') {
+    return <div style={{ width: 8, height: 11, background: '#ff3b5c', borderRadius: 2, flexShrink: 0, marginTop: 2 }} />;
+  }
+  if (type === 'injury') {
+    return (
+      <svg {...style} viewBox="0 0 24 24" fill="none" stroke="#f97316" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 2v10M12 16v6M4.93 4.93l7.07 7.07M16 16l4 4M2 12h10M16 12h6M4.93 19.07l7.07-7.07M16 8l4-4"/>
+      </svg>
+    );
+  }
+  if (type === 'penalty') {
+    return (
+      <svg {...style} viewBox="0 0 24 24" fill="none" stroke="#a855f7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/>
+      </svg>
+    );
+  }
+  if (type === 'wonderSave') {
+    return (
+      <svg {...style} viewBox="0 0 24 24" fill="none" stroke="#60a5fa" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+      </svg>
+    );
+  }
+  if (type === 'var') {
+    return (
+      <svg {...style} viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>
+      </svg>
+    );
+  }
+  if (type === 'halftime' || type === 'fulltime') {
+    return (
+      <svg {...style} viewBox="0 0 24 24" fill="none" stroke="#f5c518" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+      </svg>
+    );
+  }
   return null;
 }
 
 /* ─── Sub panel (bottom sheet) ─── */
-function SubPanel({ squad, lineup, subsUsed, onConfirm, onClose }) {
+function SubPanel({ squad, lineup, subs, onConfirm, onClose, subsUsed }) {
   const [outPlayer, setOutPlayer] = useState(null);
-  const [inPlayer, setInPlayer] = useState(null);
+  const [inPlayer, setInPlayer]   = useState(null);
+
   const bench = squad.filter(p => !lineup.find(l => l.id === p.id));
 
   return (
     <div style={{
-      position: 'fixed', inset: 0, zIndex: 700, background: 'rgba(0,0,0,0.75)',
-      display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
+      position: 'fixed', inset: 0, zIndex: 700,
+      background: 'rgba(0,0,0,0.7)', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
     }} onClick={onClose}>
       <div style={{
         background: 'var(--bg-2)', borderRadius: '16px 16px 0 0',
         border: '1px solid var(--border)', borderBottom: 'none',
-        maxHeight: '80vh', overflowY: 'auto',
-        padding: '0 0 32px',
+        padding: '0 0 32px', maxHeight: '75vh', overflowY: 'auto',
       }} onClick={e => e.stopPropagation()}>
 
+        {/* Handle */}
         <div style={{ display: 'flex', justifyContent: 'center', padding: '12px 0 4px' }}>
           <div style={{ width: 36, height: 4, borderRadius: 2, background: 'var(--border)' }} />
         </div>
 
-        <div style={{ padding: '8px 20px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border)' }}>
-          <span style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, color: 'var(--text)', letterSpacing: 0.5 }}>Make Substitution</span>
-          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: 'var(--text-muted)', letterSpacing: 2, textTransform: 'uppercase' }}>{3 - subsUsed} remaining</span>
+        <div style={{ padding: '8px 16px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, color: 'var(--text)' }}>Substitution</span>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: 'var(--text-muted)', letterSpacing: 2, textTransform: 'uppercase' }}>
+            {3 - subsUsed} remaining
+          </span>
         </div>
 
-        <div style={{ padding: '14px 20px 0' }}>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: 'var(--text-muted)', letterSpacing: 2.5, textTransform: 'uppercase', marginBottom: 8 }}>Player Off</div>
+        {/* Select who comes off */}
+        <div style={{ padding: '0 16px 10px' }}>
+          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: 'var(--text-muted)', letterSpacing: 2, textTransform: 'uppercase', marginBottom: 8 }}>Player Off</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
             {lineup.map((p, i) => (
               <button key={p.id || i} onClick={() => setOutPlayer(p)} style={{
                 display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', borderRadius: 8,
-                background: outPlayer?.id === p.id ? 'rgba(255,59,92,0.10)' : 'var(--bg-3)',
+                background: outPlayer?.id === p.id ? 'rgba(255,59,92,0.12)' : 'var(--bg-3)',
                 border: `1px solid ${outPlayer?.id === p.id ? 'rgba(255,59,92,0.4)' : 'var(--border)'}`,
-                cursor: 'pointer', textAlign: 'left',
+                cursor: 'pointer', textAlign: 'left', WebkitTapHighlightColor: 'transparent',
               }}>
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: 'var(--text-muted)', width: 28, letterSpacing: 1 }}>{p.position}</span>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: 'var(--text-muted)', width: 24, letterSpacing: 1 }}>{p.position}</span>
                 <span style={{ fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--text)', flex: 1 }}>{p.name}</span>
-                <span style={{ fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700, color: 'var(--text-muted)' }}>{p.overall}</span>
+                <span style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, color: 'var(--text-muted)' }}>{p.overall}</span>
               </button>
             ))}
           </div>
         </div>
 
+        {/* Select who comes on */}
         {outPlayer && (
-          <div style={{ padding: '14px 20px 0' }}>
-            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: 'var(--text-muted)', letterSpacing: 2.5, textTransform: 'uppercase', marginBottom: 8 }}>Player On</div>
+          <div style={{ padding: '0 16px 10px' }}>
+            <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: 'var(--text-muted)', letterSpacing: 2, textTransform: 'uppercase', marginBottom: 8 }}>Player On</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               {bench.map((p, i) => (
                 <button key={p.id || i} onClick={() => setInPlayer(p)} style={{
                   display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', borderRadius: 8,
-                  background: inPlayer?.id === p.id ? 'rgba(0,232,122,0.08)' : 'var(--bg-3)',
+                  background: inPlayer?.id === p.id ? 'rgba(0,232,122,0.10)' : 'var(--bg-3)',
                   border: `1px solid ${inPlayer?.id === p.id ? 'rgba(0,232,122,0.4)' : 'var(--border)'}`,
-                  cursor: 'pointer', textAlign: 'left',
+                  cursor: 'pointer', textAlign: 'left', WebkitTapHighlightColor: 'transparent',
                 }}>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: 'var(--text-muted)', width: 28, letterSpacing: 1 }}>{p.position}</span>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: 'var(--text-muted)', width: 24, letterSpacing: 1 }}>{p.position}</span>
                   <span style={{ fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--text)', flex: 1 }}>{p.name}</span>
-                  <span style={{ fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700, color: 'var(--text-muted)' }}>{p.overall}</span>
+                  <span style={{ fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, color: 'var(--text-muted)' }}>{p.overall}</span>
                 </button>
               ))}
             </div>
           </div>
         )}
 
+        {/* Confirm */}
         {outPlayer && inPlayer && (
-          <div style={{ padding: '14px 20px 0' }}>
+          <div style={{ padding: '0 16px' }}>
             <button onClick={() => onConfirm(outPlayer, inPlayer)} style={{
-              width: '100%', padding: 13, borderRadius: 8, border: 'none',
+              width: '100%', padding: 14, borderRadius: 8, border: 'none',
               background: 'var(--green)', color: '#000',
-              fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 800, letterSpacing: 2,
-              cursor: 'pointer',
-            }}>CONFIRM SUB</button>
+              fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 800, letterSpacing: 2,
+              cursor: 'pointer', WebkitTapHighlightColor: 'transparent',
+            }}>
+              CONFIRM SUB
+            </button>
           </div>
         )}
       </div>
@@ -214,79 +227,87 @@ function SubPanel({ squad, lineup, subsUsed, onConfirm, onClose }) {
 }
 
 /* ═══════════════════════════════════════════════
-   MAIN COMPONENT
+   MAIN LiveSim COMPONENT
 ═══════════════════════════════════════════════ */
 export default function LiveSim({
   fixture,
   myClubName,
-  events = [],
-  minute = 0,
-  isFinished = false,
-  squad = [],
-  lineup: initialLineup = [],
-  speed = 1,
-  onSpeedChange,
-  onFinish,
+  myGoals,
+  oppGoals,
+  events,
+  minute,
+  isFinished,
+  squad,
+  lineup: initialLineup,
   onSub,
+  onFinish,
+  speed,
+  onSpeedChange,
 }) {
   const [showSubPanel, setShowSubPanel] = useState(false);
-  const [lineup, setLineup] = useState(initialLineup.length ? initialLineup : squad.slice(0, 11));
+  const [lineup, setLineup] = useState(initialLineup || (squad?.slice(0, 11) || []));
   const [subsUsed, setSubsUsed] = useState(0);
-  const [subLog, setSubLog] = useState([]);
+  const [subEvents, setSubEvents] = useState([]); // { min, out, in }
   const feedRef = useRef(null);
 
-  const comp = getComp(fixture?.competition);
-  const myColor = CLUB_COLOR[myClubName] || 'var(--green)';
+  const myColor   = CLUB_COLOR[myClubName] || 'var(--green)';
+  const { color: compColor, accent: compAccent } = getComp(fixture?.competition);
 
-  /* Derive live score from events seen so far */
-  const liveMyGoals  = events.filter(e => e.type === 'goal').length;
-  const liveOppGoals = events.filter(e => e.type === 'goalOpp').length;
-  const homeScore = fixture?.isHome ? liveMyGoals : liveOppGoals;
-  const awayScore = fixture?.isHome ? liveOppGoals : liveMyGoals;
-
-  const result = liveMyGoals > liveOppGoals ? 'W' : liveMyGoals === liveOppGoals ? 'D' : 'L';
-  const resultColor = result === 'W' ? '#00e87a' : result === 'D' ? '#f5c518' : '#ff3b5c';
-  const progressPct = Math.min(100, Math.round((minute / 90) * 100));
-
-  /* Auto-scroll feed */
+  /* Auto-scroll feed to newest event */
   useEffect(() => {
     if (feedRef.current) {
       feedRef.current.scrollTop = feedRef.current.scrollHeight;
     }
   }, [events]);
 
+  const homeScore = fixture.isHome ? myGoals : oppGoals;
+  const awayScore = fixture.isHome ? oppGoals : myGoals;
+  const result = myGoals > oppGoals ? 'W' : myGoals === oppGoals ? 'D' : 'L';
+  const resultColor = result === 'W' ? '#00e87a' : result === 'D' ? '#f5c518' : '#ff3b5c';
+
+  /* Determine progress bar width from minute */
+  const progressPct = Math.min(100, Math.round((minute / 90) * 100));
+
   function handleSubConfirm(outPlayer, inPlayer) {
-    setLineup(prev => prev.map(p => p.id === outPlayer.id ? inPlayer : p));
-    setSubsUsed(n => n + 1);
-    setSubLog(prev => [...prev, { min: minute, out: outPlayer.name, in: inPlayer.name }]);
+    const newLineup = lineup.map(p => p.id === outPlayer.id ? inPlayer : p);
+    setLineup(newLineup);
+    setSubsUsed(s => s + 1);
+    setSubEvents(prev => [...prev, { min: minute, out: outPlayer.name, in: inPlayer.name }]);
     setShowSubPanel(false);
     if (onSub) onSub(outPlayer, inPlayer);
   }
 
-  /* ─── Event row ─── */
+  /* ─── Event row renderer ─── */
   function renderEvent(e, i) {
-    const isGoalMy   = e.type === 'goal';
-    const isGoalOpp  = e.type === 'goalOpp';
-    const isGoal     = isGoalMy || isGoalOpp;
-    const isHalf     = e.type === 'halftime';
-    const isFull     = e.type === 'fulltime';
-    const isDivider  = isHalf || isFull;
-    const isRed      = e.type === 'redCard' || e.type === 'redCardOpp';
+    const isGoalMy  = e.type === 'goal';
+    const isGoalOpp = e.type === 'goalOpp';
+    const isGoal    = isGoalMy || isGoalOpp;
+    const isHalf    = e.type === 'halftime';
+    const isFull    = e.type === 'fulltime';
+    const isDivider = isHalf || isFull;
+    const isRedMy   = e.type === 'redCard';
+    const isRedOpp  = e.type === 'redCardOpp';
+    const isYellow  = e.type === 'yellowCard' || e.type === 'yellowOpp';
+    const isSpecial = ['redCard','redCardOpp','wonderSave','var','penalty','crossbar'].includes(e.type);
+    const isSub     = e.type === 'sub';
 
-    let leftBorder = 'transparent';
-    if (isGoalMy)  leftBorder = '#00e87a';
-    if (isGoalOpp) leftBorder = '#ff3b5c';
-    if (isDivider) leftBorder = '#f5c518';
-    if (isRed)     leftBorder = '#ff3b5c';
+    let leftBorderColor = 'transparent';
+    if (isGoalMy)  leftBorderColor = '#00e87a';
+    if (isGoalOpp) leftBorderColor = '#ff3b5c';
+    if (isDivider) leftBorderColor = '#f5c518';
+    if (isRedMy || isRedOpp) leftBorderColor = '#ff3b5c';
 
-    let bg = 'transparent';
-    if (isGoalMy)  bg = 'rgba(0,232,122,0.05)';
-    if (isGoalOpp) bg = 'rgba(255,59,92,0.05)';
-    if (isDivider) bg = 'rgba(245,197,24,0.04)';
+    let bgColor = 'transparent';
+    if (isGoalMy)  bgColor = 'rgba(0,232,122,0.06)';
+    if (isGoalOpp) bgColor = 'rgba(255,59,92,0.06)';
+    if (isSpecial) bgColor = 'rgba(255,255,255,0.02)';
+    if (isDivider) bgColor = 'rgba(245,197,24,0.04)';
 
     let textColor = 'var(--text-muted)';
     if (isGoal)    textColor = 'var(--text)';
     if (isDivider) textColor = '#f5c518';
+    if (isSpecial) textColor = 'var(--text-dim)';
+    if (isSub)     textColor = 'var(--text-dim)';
 
     let minColor = 'var(--text-muted)';
     if (isGoalMy)  minColor = '#00e87a';
@@ -296,40 +317,38 @@ export default function LiveSim({
     return (
       <div key={i} style={{
         display: 'flex', alignItems: 'flex-start', gap: 10,
-        padding: isDivider ? '12px 16px' : '8px 16px',
-        background: bg,
-        borderLeft: `2px solid ${leftBorder}`,
+        padding: isDivider ? '12px 16px' : '7px 16px',
+        background: bgColor,
+        borderLeft: `3px solid ${leftBorderColor}`,
         borderBottom: isDivider ? '1px solid var(--border)' : 'none',
-        animation: 'fadeSlide 0.2s ease both',
+        animation: 'fadeSlideIn 0.25s ease both',
       }}>
         {/* Minute */}
         <span style={{
           fontFamily: 'var(--font-mono)', fontSize: 9, fontWeight: 700,
-          width: 28, flexShrink: 0, paddingTop: 2, letterSpacing: 0.5,
-          color: minColor,
+          width: 26, flexShrink: 0, paddingTop: 2,
+          color: minColor, letterSpacing: 0.5,
         }}>
           {isDivider ? '' : `${e.min}'`}
         </span>
 
         {/* Icon */}
-        {!isDivider && (
-          <div style={{ flexShrink: 0, paddingTop: 1 }}>
-            <EventIcon type={e.type} />
-          </div>
-        )}
+        <div style={{ flexShrink: 0, paddingTop: 2 }}>
+          <EventIcon type={e.type} />
+        </div>
 
-        {/* Text */}
+        {/* Text — minute prefix stripped; the minute column on the left is the only timestamp */}
         <div style={{ flex: 1 }}>
           <span style={{
-            fontFamily: 'var(--font-body)', lineHeight: 1.5,
-            fontSize: isDivider ? 10 : 12,
-            color: textColor,
+            fontFamily: 'var(--font-body)', fontSize: isDivider ? 11 : 12,
+            color: textColor, lineHeight: 1.55,
             fontWeight: isDivider ? 700 : 400,
-            letterSpacing: isDivider ? 2.5 : 0,
+            letterSpacing: isDivider ? 2 : 0,
             textTransform: isDivider ? 'uppercase' : 'none',
           }}>
-            {e.text}
+            {(e.text || '').replace(/^\d+'\s*/, '').replace(/^\d+\s+/, '')}
           </span>
+          {/* Assist line */}
           {e.assistName && (
             <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: 'var(--text-muted)', letterSpacing: 1, marginTop: 2 }}>
               Assist: {e.assistName}
@@ -340,50 +359,51 @@ export default function LiveSim({
     );
   }
 
-  /* ─── Status label ─── */
-  const statusLabel = (() => {
-    if (isFinished) return 'FT';
-    if (minute === 0) return 'KO';
-    if (minute === 45) return 'HT';
-    return `${minute}'`;
-  })();
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', background: 'var(--bg-1)', paddingBottom: 80 }}>
       <style>{`
-        @keyframes fadeSlide { from { opacity: 0; transform: translateX(-5px); } to { opacity: 1; transform: translateX(0); } }
-        @keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: 0.45 } }
+        @keyframes fadeSlideIn { from { opacity:0; transform:translateX(-6px) } to { opacity:1; transform:translateX(0) } }
+        @keyframes pulse { 0%,100% { opacity:1 } 50% { opacity:0.5 } }
+        * { -webkit-tap-highlight-color: transparent; }
       `}</style>
 
       {/* ─── Scoreboard (sticky) ─── */}
       <div style={{
-        position: 'sticky', top: 52, zIndex: 20,
+        position: 'sticky', top: 0, zIndex: 20,
         background: 'var(--bg-2)', borderBottom: '1px solid var(--border)',
       }}>
-        {/* Competition colour strip */}
-        <div style={{ height: 2, background: `linear-gradient(90deg, ${comp.accent}, ${comp.color})` }} />
+        {/* Competition bar */}
+        <div style={{ height: 3, background: `linear-gradient(90deg, ${compAccent}, ${compColor})` }} />
 
-        <div style={{ padding: '14px 16px 10px' }}>
+        <div style={{ padding: '12px 16px 10px' }}>
           {/* Teams + score */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-
             {/* Home */}
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, minWidth: 0 }}>
-              <ClubBadge name={fixture?.home} size={36} />
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+              <ClubBadge name={fixture.home} size={34} />
               <span style={{
                 fontFamily: 'var(--font-display)', fontSize: 9, fontWeight: 600,
                 color: 'var(--text-muted)', textAlign: 'center', letterSpacing: 0.5,
-                maxWidth: 72, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-              }}>{fixture?.home}</span>
+                maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              }}>{fixture.home}</span>
             </div>
 
             {/* Score block */}
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <span style={{ fontFamily: 'var(--font-display)', fontSize: 46, fontWeight: 900, color: 'var(--text)', lineHeight: 1 }}>{homeScore}</span>
+                <span style={{
+                  fontFamily: 'var(--font-display)', fontSize: 44, fontWeight: 900,
+                  color: 'var(--text)', lineHeight: 1,
+                  textShadow: isFinished && fixture.isHome && myGoals > oppGoals ? `0 0 20px ${resultColor}44` : 'none',
+                }}>{homeScore}</span>
                 <span style={{ fontFamily: 'var(--font-display)', fontSize: 22, color: 'var(--border)', lineHeight: 1 }}>–</span>
-                <span style={{ fontFamily: 'var(--font-display)', fontSize: 46, fontWeight: 900, color: 'var(--text)', lineHeight: 1 }}>{awayScore}</span>
+                <span style={{
+                  fontFamily: 'var(--font-display)', fontSize: 44, fontWeight: 900,
+                  color: 'var(--text)', lineHeight: 1,
+                }}>{awayScore}</span>
               </div>
+
+              {/* Status pill */}
               <div style={{
                 fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: 2,
                 color: isFinished ? resultColor : '#f5c518',
@@ -392,38 +412,35 @@ export default function LiveSim({
                 borderRadius: 4, padding: '2px 10px',
                 animation: !isFinished && minute > 0 ? 'pulse 2s infinite' : 'none',
               }}>
-                {statusLabel}
+                {isFinished ? 'FT' : minute === 0 ? 'KO' : minute === 45 ? 'HT' : `${minute}'`}
               </div>
             </div>
 
             {/* Away */}
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, minWidth: 0 }}>
-              <ClubBadge name={fixture?.away} size={36} />
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+              <ClubBadge name={fixture.away} size={34} />
               <span style={{
                 fontFamily: 'var(--font-display)', fontSize: 9, fontWeight: 600,
                 color: 'var(--text-muted)', textAlign: 'center', letterSpacing: 0.5,
-                maxWidth: 72, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-              }}>{fixture?.away}</span>
+                maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              }}>{fixture.away}</span>
             </div>
           </div>
 
           {/* Progress bar */}
           {!isFinished && (
-            <div style={{ height: 2, background: 'var(--bg-5)', borderRadius: 1, marginTop: 10, overflow: 'hidden' }}>
-              <div style={{
-                height: '100%', width: `${progressPct}%`,
-                background: comp.accent, transition: 'width 0.6s', borderRadius: 1,
-              }} />
+            <div style={{ height: 2, background: 'var(--bg-5)', borderRadius: 1, marginTop: 8, overflow: 'hidden' }}>
+              <div style={{ height: '100%', width: `${progressPct}%`, background: compAccent, transition: 'width 0.5s', borderRadius: 1 }} />
             </div>
           )}
 
-          {/* Speed controls */}
+          {/* Speed controls + Skip */}
           {!isFinished && (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 8 }}>
               {[1, 2, 5].map(s => (
                 <button key={s} onClick={() => onSpeedChange(s)} style={{
-                  padding: '3px 14px', borderRadius: 20,
-                  background: speed === s ? comp.accent : 'var(--bg-4)',
+                  padding: '3px 12px', borderRadius: 12,
+                  background: speed === s ? 'var(--green)' : 'var(--bg-4)',
                   border: speed === s ? 'none' : '1px solid var(--border)',
                   color: speed === s ? '#000' : 'var(--text-muted)',
                   fontFamily: 'var(--font-mono)', fontSize: 8, fontWeight: 700, letterSpacing: 1,
@@ -431,8 +448,8 @@ export default function LiveSim({
                 }}>{s}x</button>
               ))}
               <div style={{ width: 1, height: 14, background: 'var(--border)', margin: '0 2px' }} />
-              <button onClick={() => { if (onFinish) onFinish(); }} style={{
-                padding: '3px 12px', borderRadius: 20,
+              <button onClick={onFinish} style={{
+                padding: '3px 10px', borderRadius: 12,
                 background: 'var(--bg-4)', border: '1px solid var(--border)',
                 color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: 8, letterSpacing: 1,
                 cursor: 'pointer',
@@ -440,10 +457,10 @@ export default function LiveSim({
             </div>
           )}
 
-          {/* Sub log strip */}
-          {subLog.length > 0 && (
-            <div style={{ display: 'flex', gap: 6, overflowX: 'auto', marginTop: 8, scrollbarWidth: 'none' }}>
-              {subLog.map((s, i) => (
+          {/* Substitutions summary strip */}
+          {subEvents.length > 0 && (
+            <div style={{ display: 'flex', gap: 8, overflowX: 'auto', marginTop: 8, scrollbarWidth: 'none' }}>
+              {subEvents.map((s, i) => (
                 <div key={i} style={{
                   flexShrink: 0, display: 'flex', alignItems: 'center', gap: 4,
                   background: 'var(--bg-4)', border: '1px solid var(--border)', borderRadius: 6,
@@ -451,7 +468,7 @@ export default function LiveSim({
                 }}>
                   <span style={{ fontFamily: 'var(--font-mono)', fontSize: 7, color: 'var(--text-muted)', letterSpacing: 1 }}>{s.min}'</span>
                   <span style={{ fontFamily: 'var(--font-body)', fontSize: 10, color: '#ff3b5c' }}>{s.out.split(' ').pop()}</span>
-                  <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2" strokeLinecap="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+                  <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
                   <span style={{ fontFamily: 'var(--font-body)', fontSize: 10, color: '#00e87a' }}>{s.in.split(' ').pop()}</span>
                 </div>
               ))}
@@ -461,12 +478,12 @@ export default function LiveSim({
       </div>
 
       {/* ─── Commentary feed ─── */}
-      <div ref={feedRef} style={{ flex: 1, overflowY: 'auto' }}>
+      <div ref={feedRef} style={{ flex: 1, overflowY: 'auto', padding: '4px 0' }}>
         {events.length === 0 && (
           <div style={{
-            padding: '60px 16px', textAlign: 'center',
+            padding: '40px 16px', textAlign: 'center',
             fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-muted)',
-            letterSpacing: 2.5, textTransform: 'uppercase',
+            letterSpacing: 2, textTransform: 'uppercase',
             animation: 'pulse 1.5s infinite',
           }}>
             Kick-off imminent...
@@ -475,18 +492,19 @@ export default function LiveSim({
         {events.map((e, i) => renderEvent(e, i))}
       </div>
 
-      {/* ─── Bottom bar ─── */}
+      {/* ─── Bottom action bar ─── */}
       <div style={{
         position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 10,
-        padding: '12px 16px 28px', borderTop: '1px solid var(--border)',
+        padding: '10px 16px 24px', borderTop: '1px solid var(--border)',
         background: 'var(--bg-1)',
       }}>
         {isFinished ? (
           <button onClick={onFinish} style={{
             width: '100%', padding: 15, borderRadius: 8, border: 'none',
-            background: `linear-gradient(135deg, ${resultColor}, ${resultColor}cc)`,
+            background: `linear-gradient(135deg, ${resultColor}, ${resultColor}bb)`,
             color: result === 'D' ? '#000' : result === 'W' ? '#000' : '#fff',
-            fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 900, letterSpacing: 2, cursor: 'pointer',
+            fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 900,
+            letterSpacing: 2, cursor: 'pointer',
           }}>
             VIEW MATCH REPORT
           </button>
@@ -499,18 +517,15 @@ export default function LiveSim({
               background: subsUsed >= 3 ? 'var(--bg-4)' : 'var(--bg-3)',
               border: `1px solid ${subsUsed >= 3 ? 'var(--bg-5)' : 'var(--border)'}`,
               color: subsUsed >= 3 ? 'var(--bg-5)' : 'var(--text-dim)',
-              fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700, letterSpacing: 1,
-              cursor: subsUsed >= 3 ? 'not-allowed' : 'pointer',
+              fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700,
+              letterSpacing: 1, cursor: subsUsed >= 3 ? 'not-allowed' : 'pointer',
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
             }}
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="17 1 21 5 17 9"/>
-              <path d="M3 11V9a4 4 0 0 1 4-4h14"/>
-              <polyline points="7 23 3 19 7 15"/>
-              <path d="M21 13v2a4 4 0 0 1-4 4H3"/>
+              <polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>
             </svg>
-            {subsUsed >= 3 ? 'No subs remaining' : `Make Substitution (${3 - subsUsed} left)`}
+            Make Substitution {subsUsed < 3 ? `(${3 - subsUsed} left)` : '(none left)'}
           </button>
         )}
       </div>
@@ -518,8 +533,9 @@ export default function LiveSim({
       {/* ─── Sub panel ─── */}
       {showSubPanel && (
         <SubPanel
-          squad={squad}
+          squad={squad || []}
           lineup={lineup}
+          subs={subEvents}
           subsUsed={subsUsed}
           onConfirm={handleSubConfirm}
           onClose={() => setShowSubPanel(false)}

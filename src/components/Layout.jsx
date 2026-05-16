@@ -70,15 +70,26 @@ const CLUB_ABBR = {
   'Borussia Dortmund': 'BVB', 'Juventus': 'JUV',
 };
 
+/* SVG badges — clean renders across all pages */
 const CLUB_BADGE_URL = {
-  'Manchester City':    'https://resources.premierleague.com/premierleague/badges/50/t43.png',
-  'Liverpool':          'https://resources.premierleague.com/premierleague/badges/50/t14.png',
-  'Arsenal':            'https://resources.premierleague.com/premierleague/badges/50/t3.png',
-  'Chelsea':            'https://resources.premierleague.com/premierleague/badges/50/t8.png',
-  'Manchester United':  'https://resources.premierleague.com/premierleague/badges/50/t1.png',
-  'Tottenham':          'https://resources.premierleague.com/premierleague/badges/50/t6.png',
-  'Aston Villa':        'https://resources.premierleague.com/premierleague/badges/50/t7.png',
-  'Brighton':           'https://resources.premierleague.com/premierleague/badges/50/t36.png',
+  'Manchester City':   'https://upload.wikimedia.org/wikipedia/en/e/eb/Manchester_City_FC_badge.svg',
+  'Liverpool':         'https://upload.wikimedia.org/wikipedia/en/0/0c/Liverpool_FC.svg',
+  'Arsenal':           'https://upload.wikimedia.org/wikipedia/en/5/53/Arsenal_FC.svg',
+  'Chelsea':           'https://upload.wikimedia.org/wikipedia/en/c/cc/Chelsea_FC.svg',
+  'Manchester United': 'https://upload.wikimedia.org/wikipedia/en/7/7a/Manchester_United_FC_crest.svg',
+  'Tottenham':         'https://upload.wikimedia.org/wikipedia/en/b/b4/Tottenham_Hotspur.svg',
+  'Aston Villa':       'https://upload.wikimedia.org/wikipedia/en/9/9f/Aston_Villa_FC_new_crest.svg',
+  'Brighton':          'https://upload.wikimedia.org/wikipedia/en/f/fd/Brighton_%26_Hove_Albion_FC_logo.svg',
+  'Bayern Munich':     'https://upload.wikimedia.org/wikipedia/commons/1/1b/FC_Bayern_M%C3%BCnchen_logo_%282017%29.svg',
+  'Real Madrid':       'https://upload.wikimedia.org/wikipedia/en/5/56/Real_Madrid_CF.svg',
+  'Barcelona':         'https://upload.wikimedia.org/wikipedia/en/4/47/FC_Barcelona_%28crest%29.svg',
+  'PSG':               'https://upload.wikimedia.org/wikipedia/en/a/a7/Paris_Saint-Germain_F.C..svg',
+  'AC Milan':          'https://upload.wikimedia.org/wikipedia/commons/d/d0/Logo_of_AC_Milan.svg',
+  'Inter Milan':       'https://upload.wikimedia.org/wikipedia/commons/0/05/FC_Internazionale_Milano_2021.svg',
+  'Juventus':          'https://upload.wikimedia.org/wikipedia/commons/1/15/Juventus_FC_2017_icon_%28black%29.svg',
+  'Atletico Madrid':   'https://upload.wikimedia.org/wikipedia/en/f/f4/Atletico_Madrid_2017_logo.svg',
+  'Borussia Dortmund': 'https://upload.wikimedia.org/wikipedia/commons/6/67/Borussia_Dortmund_logo.svg',
+  'Bayer Leverkusen':  'https://upload.wikimedia.org/wikipedia/en/5/59/Bayer_04_Leverkusen_logo.svg',
 };
 
 const fmt = (n) => {
@@ -245,7 +256,7 @@ export default function Layout({ children }) {
         .bottom-nav-link.active { color: var(--green); }
         .bottom-nav-link.active svg { filter: drop-shadow(0 0 4px rgba(0,232,122,0.5)); }
 
-        /* ── Sidebar stadium bg ── */
+        /* ── Sidebar ── */
         .sidebar {
           position: relative;
           overflow: hidden;
@@ -264,6 +275,14 @@ export default function Layout({ children }) {
         @media (max-width: 768px) {
           .sidebar { display: none !important; }
           .bottom-nav { display: block !important; }
+
+          /*
+           * CRITICAL: padding-top MUST be exactly 52px — the height of the fixed
+           * top bar. This is the ONLY top offset applied. Pages that use
+           * position:sticky internally (like Matchday's CalendarStrip) set
+           * their own top:0 to stick at the top of <main>, which visually
+           * places them directly under the top bar with zero gap.
+           */
           .main-content {
             padding-top: 52px !important;
             padding-bottom: 72px !important;

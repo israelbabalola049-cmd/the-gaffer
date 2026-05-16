@@ -513,7 +513,7 @@ function CalendarStrip({ fixtures, currentDay, onDayTap, playedIds }) {
     <div
       ref={headerRef}
       style={{
-        position: 'sticky', top: 52, zIndex: 15,
+        position: 'sticky', top: 0, zIndex: 15,
         background: 'var(--bg-1)',
         borderBottom: '1px solid var(--border)',
       }}
@@ -1485,7 +1485,7 @@ export default function Matchday() {
     return () => ro.disconnect();
   }, []);
 
-  const NAV_H    = 52;          // global nav bar height
+  const NAV_H    = 0;            // <main> already starts below the 52px nav bar
   const TAB_TOP  = NAV_H + calH; // exact pixel where tab bar sticks
 
   return (
