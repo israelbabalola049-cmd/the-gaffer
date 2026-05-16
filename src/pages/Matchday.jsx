@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import useGameStore from '../store/gameStore';
 import LiveSim from '../matchday/LiveSim';
 import PostMatch from '../matchday/PostMatch';
-import { runMatch } from '../engine/matchEngine';
+import { runMatch } from '../matchday/matchEngine';
 
 /* ═══════════════════════════════════════════════
    CONSTANTS

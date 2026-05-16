@@ -15,20 +15,124 @@
      onContinue   – fn() — save result and go back to calendar
 ═══════════════════════════════════════════════════════ */
 import { useState, useMemo } from 'react';
-import { POST_MATCH_QUESTIONS, pickQuestions } from './conferenceQuestions';
-import { COMP_COLORS, COMP_ACCENT } from './matchEngine';
 
-/* ─── Club badge / color maps ─── */
+/* ─── Competition config (self-contained, no external import) ─── */
+const COMP = {
+  'Premier League':    { color: '#3d0064', accent: '#a855f7' },
+  'La Liga':           { color: '#c2410c', accent: '#f97316' },
+  'Bundesliga':        { color: '#d20515', accent: '#ef4444' },
+  'Serie A':           { color: '#1a1a6b', accent: '#6366f1' },
+  'Ligue 1':           { color: '#001f5f', accent: '#3b82f6' },
+  'Champions League':  { color: '#1a3a6b', accent: '#fbbf24' },
+  'Europa League':     { color: '#7c2d12', accent: '#fb923c' },
+  'Conference League': { color: '#0a5c36', accent: '#34d399' },
+  'FA Cup':            { color: '#003087', accent: '#60a5fa' },
+  'Carabao Cup':       { color: '#003087', accent: '#4ade80' },
+  'Cup':               { color: '#c9a227', accent: '#fbbf24' },
+};
+const getComp = n => COMP[n] || { color: '#1a1a1a', accent: '#555' };
+
+/* ─── Post-match conference questions (inline) ─── */
+const POST_MATCH_QUESTIONS = {
+  win: [
+    {
+      question: "A convincing performance. What was the key to unlocking them today?",
+      answers: [
+        { text: "Pressing high and winning second balls. We suffocated their build-up.", effect: { morale: 5, managerRating: 1 } },
+        { text: "We were just better. Simple as that.", effect: { morale: 1, managerRating: 0 } },
+        { text: "The tactical setup gave us overloads on the left — we exploited that.", effect: { morale: 4, managerRating: 2 } },
+        { text: "Honestly? A bit of luck plus quality. Hard to stop.", effect: { morale: -1, managerRating: -1 } },
+      ],
+    },
+    {
+      question: "Your striker was anonymous for 70 minutes then scored. Happy with that?",
+      answers: [
+        { text: "He stayed mentally sharp and punished them when it mattered. That's elite.", effect: { morale: 5, managerRating: 1 } },
+        { text: "No, he needs to be more involved. I'll be having that conversation.", effect: { morale: -2, managerRating: 0 } },
+        { text: "Strikers live for those moments. He delivered. That's all I ask.", effect: { morale: 4, managerRating: 1 } },
+        { text: "It worried me at half-time, I'll be honest. But he answered.", effect: { morale: 1, managerRating: 0 } },
+      ],
+    },
+    {
+      question: "Can you sustain this level for the rest of the season?",
+      answers: [
+        { text: "We train for exactly this. Consistency is the hallmark of a winning team.", effect: { morale: 4, managerRating: 1 } },
+        { text: "One game at a time. Today means nothing if we drop points next week.", effect: { morale: 3, managerRating: 1 } },
+        { text: "Hard to say. We'll take it game by game.", effect: { morale: 0, managerRating: 0 } },
+        { text: "I don't want to set expectations. Football can change quickly.", effect: { morale: -1, managerRating: -1 } },
+      ],
+    },
+  ],
+  loss: [
+    {
+      question: "A tough afternoon. Was that the worst performance of your tenure?",
+      answers: [
+        { text: "Not at all. We had chances — the result is harsh given the performance.", effect: { morale: 2, managerRating: 0 } },
+        { text: "Yes. I won't hide from that. We simply weren't good enough today.", effect: { morale: -4, managerRating: -2 } },
+        { text: "Results can be deceiving. We played well in phases.", effect: { morale: 1, managerRating: 0 } },
+        { text: "I'll need to see it back. I'm too frustrated to be fair right now.", effect: { morale: -2, managerRating: -1 } },
+      ],
+    },
+    {
+      question: "Three points dropped. Is the dressing room still behind you?",
+      answers: [
+        { text: "100%. Losing together is what defines a squad. We'll come back stronger.", effect: { morale: 3, managerRating: 1 } },
+        { text: "I'll ask them. It's a question I can't answer for them.", effect: { morale: -3, managerRating: -2 } },
+        { text: "I have total faith in this group. One result doesn't break us.", effect: { morale: 2, managerRating: 1 } },
+        { text: "All I can do is lead. The rest is up to them.", effect: { morale: -1, managerRating: 0 } },
+      ],
+    },
+    {
+      question: "Where does the blame lie for today's result?",
+      answers: [
+        { text: "It starts with me. I set the team up and the setup didn't work today.", effect: { morale: 3, managerRating: 1 } },
+        { text: "Individual errors cost us. I won't point fingers publicly though.", effect: { morale: -2, managerRating: -1 } },
+        { text: "It's collective. We win together, we lose together.", effect: { morale: 2, managerRating: 1 } },
+        { text: "I'd rather not assign blame right now. Let me process this first.", effect: { morale: -1, managerRating: 0 } },
+      ],
+    },
+  ],
+  draw: [
+    {
+      question: "A point from this — satisfied or frustrated?",
+      answers: [
+        { text: "Both. We had enough to win it but we defended well when we needed to.", effect: { morale: 2, managerRating: 1 } },
+        { text: "Satisfied. Against this opposition, a point is a good result.", effect: { morale: 1, managerRating: 0 } },
+        { text: "Frustrated. We let them back in after controlling the first half.", effect: { morale: 2, managerRating: 1 } },
+        { text: "Neither. We'll move on and focus on the next one.", effect: { morale: -1, managerRating: 0 } },
+      ],
+    },
+    {
+      question: "The dropped points could be costly. Are you worried?",
+      answers: [
+        { text: "Every dropped point matters at this level. We know that. We'll respond.", effect: { morale: 3, managerRating: 1 } },
+        { text: "It's one result. I'm not going to catastrophise.", effect: { morale: 0, managerRating: 0 } },
+        { text: "We'll assess at the end of the season. Right now the focus is recovery.", effect: { morale: 1, managerRating: 0 } },
+        { text: "I'm not in the business of worrying. I'm in the business of winning.", effect: { morale: -1, managerRating: -1 } },
+      ],
+    },
+  ],
+};
+
+function pickQuestions(pool, condition, count) {
+  const list = pool[condition] || pool.draw;
+  return [...list].sort(() => Math.random() - 0.5).slice(0, count).map(q => ({
+    ...q,
+    answers: [...q.answers].sort(() => Math.random() - 0.5),
+  }));
+}
+
+/* ─── SVG badge URLs ─── */
 const CLUB_BADGE_URL = {
-  'Manchester City':   'https://resources.premierleague.com/premierleague/badges/50/t43.png',
-  'Liverpool':         'https://resources.premierleague.com/premierleague/badges/50/t14.png',
-  'Arsenal':           'https://resources.premierleague.com/premierleague/badges/50/t3.png',
-  'Chelsea':           'https://resources.premierleague.com/premierleague/badges/50/t8.png',
-  'Manchester United': 'https://resources.premierleague.com/premierleague/badges/50/t1.png',
-  'Tottenham':         'https://resources.premierleague.com/premierleague/badges/50/t6.png',
-  'Aston Villa':       'https://resources.premierleague.com/premierleague/badges/50/t7.png',
-  'Brighton':          'https://resources.premierleague.com/premierleague/badges/50/t36.png',
-  'Bayern Munich':     'https://upload.wikimedia.org/wikipedia/commons/thumb/1/1b/FC_Bayern_M%C3%BCnchen_logo_%282017%29.svg/240px-FC_Bayern_M%C3%BCnchen_logo_%282017%29.svg.png',
+  'Manchester City':   'https://upload.wikimedia.org/wikipedia/en/e/eb/Manchester_City_FC_badge.svg',
+  'Liverpool':         'https://upload.wikimedia.org/wikipedia/en/0/0c/Liverpool_FC.svg',
+  'Arsenal':           'https://upload.wikimedia.org/wikipedia/en/5/53/Arsenal_FC.svg',
+  'Chelsea':           'https://upload.wikimedia.org/wikipedia/en/c/cc/Chelsea_FC.svg',
+  'Manchester United': 'https://upload.wikimedia.org/wikipedia/en/7/7a/Manchester_United_FC_crest.svg',
+  'Tottenham':         'https://upload.wikimedia.org/wikipedia/en/b/b4/Tottenham_Hotspur.svg',
+  'Aston Villa':       'https://upload.wikimedia.org/wikipedia/en/9/9f/Aston_Villa_FC_new_crest.svg',
+  'Brighton':          'https://upload.wikimedia.org/wikipedia/en/f/fd/Brighton_%26_Hove_Albion_FC_logo.svg',
+  'Bayern Munich':     'https://upload.wikimedia.org/wikipedia/commons/1/1b/FC_Bayern_M%C3%BCnchen_logo_%282017%29.svg',
   'Real Madrid':       'https://upload.wikimedia.org/wikipedia/en/5/56/Real_Madrid_CF.svg',
   'Barcelona':         'https://upload.wikimedia.org/wikipedia/en/4/47/FC_Barcelona_%28crest%29.svg',
   'PSG':               'https://upload.wikimedia.org/wikipedia/en/a/a7/Paris_Saint-Germain_F.C..svg',
@@ -37,6 +141,7 @@ const CLUB_BADGE_URL = {
   'Juventus':          'https://upload.wikimedia.org/wikipedia/commons/1/15/Juventus_FC_2017_icon_%28black%29.svg',
   'Atletico Madrid':   'https://upload.wikimedia.org/wikipedia/en/f/f4/Atletico_Madrid_2017_logo.svg',
   'Borussia Dortmund': 'https://upload.wikimedia.org/wikipedia/commons/6/67/Borussia_Dortmund_logo.svg',
+  'Bayer Leverkusen':  'https://upload.wikimedia.org/wikipedia/en/5/59/Bayer_04_Leverkusen_logo.svg',
 };
 
 const CLUB_COLOR = {
@@ -310,7 +415,7 @@ export default function PostMatch({
   const resultColor = result === 'W' ? '#00e87a' : result === 'D' ? '#f5c518' : '#ff3b5c';
 
   const myColor     = CLUB_COLOR[myClubName] || '#00e87a';
-  const compAccent  = COMP_ACCENT[fixture?.competition] || '#888';
+  const compAccent  = getComp(fixture?.competition).accent;
 
   /* ─── Player ratings derived from events ─── */
   const playerRatings = useMemo(() => {
