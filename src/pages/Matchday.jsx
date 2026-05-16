@@ -1,7 +1,7 @@
-import { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import useGameStore from '../store/gameStore';
-import LiveSim from './LiveSim';
-import PostMatch from './PostMatch';
+import LiveSim from '../matchday/LiveSim';
+import PostMatch from '../matchday/PostMatch';
 import { runMatch } from '../engine/matchEngine';
 
 /* ═══════════════════════════════════════════════
@@ -15,7 +15,7 @@ const COMP = {
   'Serie A':           { color: '#1a1a6b', accent: '#6366f1', label: 'SA' },
   'Ligue 1':           { color: '#001f5f', accent: '#3b82f6', label: 'L1' },
   'Champions League':  { color: '#1a3a6b', accent: '#fbbf24', label: 'UCL' },
-  'Europa League':     { color: '#c05000', accent: '#fb923c', label: 'UEL' },
+  'Europa League':     { color: '#7c2d12', accent: '#fb923c', label: 'UEL' },
   'Conference League': { color: '#0a5c36', accent: '#34d399', label: 'UECL' },
   'FA Cup':            { color: '#003087', accent: '#60a5fa', label: 'FAC' },
   'Carabao Cup':       { color: '#003087', accent: '#4ade80', label: 'CC' },
@@ -33,18 +33,53 @@ const CLUB_COLOR = {
   'Borussia Dortmund':'#FDE100','Juventus':'#555',
 };
 
+/* SVG-based badge URLs — clean renders, no cutout artefacts */
 const CLUB_BADGE = {
-  'Manchester City':   'https://resources.premierleague.com/premierleague/badges/50/t43.png',
-  'Liverpool':         'https://resources.premierleague.com/premierleague/badges/50/t14.png',
-  'Arsenal':           'https://resources.premierleague.com/premierleague/badges/50/t3.png',
-  'Chelsea':           'https://resources.premierleague.com/premierleague/badges/50/t8.png',
-  'Manchester United': 'https://resources.premierleague.com/premierleague/badges/50/t1.png',
-  'Tottenham':         'https://resources.premierleague.com/premierleague/badges/50/t6.png',
-  'Aston Villa':       'https://resources.premierleague.com/premierleague/badges/50/t7.png',
-  'Brighton':          'https://resources.premierleague.com/premierleague/badges/50/t36.png',
+  'Manchester City':
+    'https://upload.wikimedia.org/wikipedia/en/e/eb/Manchester_City_FC_badge.svg',
+  'Liverpool':
+    'https://upload.wikimedia.org/wikipedia/en/0/0c/Liverpool_FC.svg',
+  'Arsenal':
+    'https://upload.wikimedia.org/wikipedia/en/5/53/Arsenal_FC.svg',
+  'Chelsea':
+    'https://upload.wikimedia.org/wikipedia/en/c/cc/Chelsea_FC.svg',
+  'Manchester United':
+    'https://upload.wikimedia.org/wikipedia/en/7/7a/Manchester_United_FC_crest.svg',
+  'Tottenham':
+    'https://upload.wikimedia.org/wikipedia/en/b/b4/Tottenham_Hotspur.svg',
+  'Aston Villa':
+    'https://upload.wikimedia.org/wikipedia/en/9/9f/Aston_Villa_FC_new_crest.svg',
+  'Brighton':
+    'https://upload.wikimedia.org/wikipedia/en/f/fd/Brighton_%26_Hove_Albion_FC_logo.svg',
+  'Bayern Munich':
+    'https://upload.wikimedia.org/wikipedia/commons/1/1b/FC_Bayern_M%C3%BCnchen_logo_%282017%29.svg',
+  'Real Madrid':
+    'https://upload.wikimedia.org/wikipedia/en/5/56/Real_Madrid_CF.svg',
+  'Barcelona':
+    'https://upload.wikimedia.org/wikipedia/en/4/47/FC_Barcelona_%28crest%29.svg',
+  'PSG':
+    'https://upload.wikimedia.org/wikipedia/en/a/a7/Paris_Saint-Germain_F.C..svg',
+  'AC Milan':
+    'https://upload.wikimedia.org/wikipedia/commons/d/d0/Logo_of_AC_Milan.svg',
+  'Inter Milan':
+    'https://upload.wikimedia.org/wikipedia/commons/0/05/FC_Internazionale_Milano_2021.svg',
+  'Juventus':
+    'https://upload.wikimedia.org/wikipedia/commons/1/15/Juventus_FC_2017_icon_%28black%29.svg',
+  'Atletico Madrid':
+    'https://upload.wikimedia.org/wikipedia/en/f/f4/Atletico_Madrid_2017_logo.svg',
+  'Borussia Dortmund':
+    'https://upload.wikimedia.org/wikipedia/commons/6/67/Borussia_Dortmund_logo.svg',
+  'Bayer Leverkusen':
+    'https://upload.wikimedia.org/wikipedia/en/5/59/Bayer_04_Leverkusen_logo.svg',
 };
 
+/* Season starts in August — map game month index to real month */
+const SEASON_START_MONTH = 7; // August (0-indexed)
 const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+function gameMonthLabel(gameMonthIdx) {
+  return MONTH_NAMES[(SEASON_START_MONTH + gameMonthIdx) % 12];
+}
 
 const FORMATIONS = ['4-3-3', '4-4-2', '4-2-3-1', '3-5-2', '5-3-2', '3-4-3'];
 
@@ -324,8 +359,16 @@ function ClubBadge({ name, size = 28 }) {
   const abbr = (name || '?').slice(0, 3).toUpperCase();
   if (url && !failed) {
     return (
-      <img src={url} alt={name} onError={() => setFailed(true)}
-        style={{ width: size, height: size, objectFit: 'contain', flexShrink: 0 }} />
+      <img
+        src={url}
+        alt={name}
+        onError={() => setFailed(true)}
+        style={{
+          width: size, height: size,
+          objectFit: 'contain', flexShrink: 0,
+          /* No background — SVGs render clean without a box */
+        }}
+      />
     );
   }
   return (
@@ -350,6 +393,7 @@ function getTeamRating(squad) {
   return Math.round(top11.reduce((s, p) => s + p.overall, 0) / top11.length);
 }
 
+/* ─── Fixture generator ─── */
 function generateFixtures(myClub, allClubs, season) {
   if (!myClub || !allClubs?.length) return [];
   const leagueClubs = allClubs.filter(c => c.league === myClub.league && c.name !== myClub.name);
@@ -398,46 +442,83 @@ function generateFixtures(myClub, allClubs, season) {
 
 /* ═══════════════════════════════════════════════
    CALENDAR STRIP
+   - Uses real calendar dates starting from Aug 1
+   - Days of month shown, not absolute game day numbers
+   - No "Day X" label — shows month name only
+   - Only days with fixtures OR within ±21 days of
+     current day are rendered (sparse approach)
 ═══════════════════════════════════════════════ */
 
+const SEASON_START = { year: 2024, month: 7 }; // August (0-indexed)
+
+function gameDay2Date(gameDay) {
+  /* gameDay 1 = Aug 1. Returns { d, m, y } */
+  const startMs = new Date(SEASON_START.year, SEASON_START.month, 1).getTime();
+  const date    = new Date(startMs + (gameDay - 1) * 86400000);
+  return { d: date.getDate(), m: date.getMonth(), y: date.getFullYear() };
+}
+
 function CalendarStrip({ fixtures, currentDay, onDayTap, playedIds }) {
-  const stripRef = useRef(null);
-  const totalDays = Math.max(currentDay + 28, fixtures.length ? fixtures[fixtures.length - 1].day + 14 : 90);
+  const stripRef  = useRef(null);
+  const headerRef = useRef(null);
+
+  /* Build day range: first fixture day - 7  to  last fixture day + 14, min 60 days */
+  const { minDay, maxDay } = useMemo(() => {
+    if (!fixtures.length) return { minDay: 1, maxDay: 60 };
+    const days = fixtures.map(f => f.day);
+    return {
+      minDay: Math.max(1, Math.min(...days) - 7),
+      maxDay: Math.max(...days) + 14,
+    };
+  }, [fixtures]);
 
   const fixByDay = useMemo(() => {
     const m = {};
-    fixtures.forEach(f => {
-      if (!m[f.day]) m[f.day] = [];
-      m[f.day].push(f);
-    });
+    fixtures.forEach(f => { (m[f.day] = m[f.day] || []).push(f); });
     return m;
   }, [fixtures]);
 
-  const days = useMemo(() => Array.from({ length: totalDays }, (_, i) => {
-    const d = i + 1;
-    return {
-      d,
-      monthIdx: Math.floor((d - 1) / 30) % 12,
-      dayOfMonth: ((d - 1) % 30) + 1,
-      dayName: ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][(d - 1) % 7],
-      fixtures: fixByDay[d] || [],
-    };
-  }), [totalDays, fixByDay]);
+  const days = useMemo(() => {
+    const arr = [];
+    for (let d = minDay; d <= maxDay; d++) {
+      const { d: dom, m, y } = gameDay2Date(d);
+      arr.push({
+        gameDay: d,
+        dom,
+        monthName: MONTH_NAMES[m],
+        year: y,
+        dayName: ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'][(d - 1) % 7],
+        fixtures: fixByDay[d] || [],
+      });
+    }
+    return arr;
+  }, [minDay, maxDay, fixByDay]);
 
+  /* Month label for the header — based on currentDay */
+  const currentDayInfo = gameDay2Date(currentDay);
+
+  /* Auto-scroll so current day is centered */
   useEffect(() => {
     if (stripRef.current) {
-      const idx = currentDay - 1;
-      const w = 60;
-      stripRef.current.scrollLeft = Math.max(0, idx * w - 120);
+      const CELL_W = 58;
+      const idx = days.findIndex(d => d.gameDay === currentDay);
+      if (idx >= 0) {
+        const target = idx * CELL_W - stripRef.current.clientWidth / 2 + CELL_W / 2;
+        stripRef.current.scrollLeft = Math.max(0, target);
+      }
     }
-  }, [currentDay]);
+  }, [currentDay, days]);
 
   return (
-    <div style={{
-      position: 'sticky', top: 52, zIndex: 15,
-      background: 'var(--bg-1)', borderBottom: '1px solid var(--border)',
-    }}>
-      {/* Header row */}
+    <div
+      ref={headerRef}
+      style={{
+        position: 'sticky', top: 52, zIndex: 15,
+        background: 'var(--bg-1)',
+        borderBottom: '1px solid var(--border)',
+      }}
+    >
+      {/* Month / season label row */}
       <div style={{
         padding: '7px 16px 4px',
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
@@ -446,72 +527,84 @@ function CalendarStrip({ fixtures, currentDay, onDayTap, playedIds }) {
           fontFamily: 'var(--font-mono)', fontSize: 8,
           color: 'var(--text-muted)', letterSpacing: 3, textTransform: 'uppercase',
         }}>
-          {MONTH_NAMES[days[currentDay - 1]?.monthIdx ?? 0]} · Season 1
+          {currentDayInfo.monthName.toUpperCase()} · {currentDayInfo.year}
         </span>
         <span style={{
-          fontFamily: 'var(--font-display)', fontSize: 11, fontWeight: 700, color: 'var(--green)',
+          fontFamily: 'var(--font-mono)', fontSize: 8,
+          color: 'var(--green)', letterSpacing: 2, textTransform: 'uppercase',
         }}>
-          Day {currentDay}
+          Season 1
         </span>
       </div>
 
-      {/* Day strip */}
+      {/* Scrollable day strip */}
       <div
         ref={stripRef}
-        className="cal-strip"
         style={{
           display: 'flex', overflowX: 'auto', scrollbarWidth: 'none',
-          WebkitOverflowScrolling: 'touch', paddingBottom: 6,
+          WebkitOverflowScrolling: 'touch',
+          paddingBottom: 8,
         }}
       >
-        <style>{`.cal-strip::-webkit-scrollbar { display: none; }`}</style>
-        {days.map(({ d, dayName, dayOfMonth, fixtures: dayFix }) => {
-          const isCurrent = d === currentDay;
-          const isPast    = d < currentDay;
+        <style>{`
+          .cal-strip::-webkit-scrollbar { display: none; }
+        `}</style>
+
+        {days.map(({ gameDay, dom, monthName, dayName, fixtures: dayFix }) => {
+          const isCurrent = gameDay === currentDay;
+          const isPast    = gameDay < currentDay;
           const hasFix    = dayFix.length > 0;
           const isPlayed  = hasFix && dayFix.every(f => playedIds.has(f.id));
           const firstFix  = dayFix[0];
           const comp      = firstFix ? getComp(firstFix.competition) : null;
-          const oppName   = firstFix
-            ? (firstFix.isHome ? firstFix.away : firstFix.home)
-            : null;
+          const oppName   = firstFix ? (firstFix.isHome ? firstFix.away : firstFix.home) : null;
+
+          /* Hide past non-fixture days that are far behind current */
+          if (isPast && !hasFix && (currentDay - gameDay) > 5) return null;
 
           return (
             <div
-              key={d}
-              onClick={() => onDayTap(d, firstFix)}
+              key={gameDay}
+              onClick={() => onDayTap(gameDay, firstFix || null)}
               style={{
-                flexShrink: 0, width: 60, display: 'flex', flexDirection: 'column',
-                alignItems: 'center', gap: 3, padding: '4px 0 6px',
+                flexShrink: 0, width: 58,
+                display: 'flex', flexDirection: 'column',
+                alignItems: 'center', gap: 2, padding: '2px 0 4px',
                 cursor: 'pointer',
-                background: isCurrent ? 'rgba(0,232,122,0.05)' : 'transparent',
+                background: isCurrent ? 'rgba(0,232,122,0.06)' : 'transparent',
                 borderBottom: isCurrent ? '2px solid var(--green)' : '2px solid transparent',
-                opacity: isPast && !hasFix ? 0.3 : 1,
+                opacity: isPast && !hasFix ? 0.25 : isPast && isPlayed ? 0.55 : 1,
                 transition: 'background 0.15s',
               }}
             >
+              {/* Day abbreviation */}
               <span style={{
-                fontFamily: 'var(--font-mono)', fontSize: 7, letterSpacing: 1, textTransform: 'uppercase',
+                fontFamily: 'var(--font-mono)', fontSize: 7,
+                letterSpacing: 1, textTransform: 'uppercase',
                 color: isCurrent ? 'var(--green)' : 'var(--text-muted)',
               }}>{dayName}</span>
 
+              {/* Day of month number */}
               <span style={{
-                fontFamily: 'var(--font-display)', fontSize: 16,
-                fontWeight: isCurrent ? 900 : 600, lineHeight: 1,
+                fontFamily: 'var(--font-display)', fontSize: 17,
+                fontWeight: isCurrent ? 900 : 500, lineHeight: 1,
                 color: isCurrent ? 'var(--green)' : isPast ? 'var(--text-muted)' : 'var(--text)',
-              }}>{dayOfMonth}</span>
+              }}>{dom}</span>
 
+              {/* Fixture indicator */}
               {hasFix ? (
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, marginTop: 2 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, marginTop: 1 }}>
+                  {/* Competition colour bar */}
                   <div style={{
-                    width: 24, height: 3, borderRadius: 2,
-                    background: isPlayed ? '#444' : comp.accent,
-                    opacity: isPlayed ? 0.5 : 1,
+                    width: 22, height: 3, borderRadius: 2,
+                    background: isPlayed ? '#333' : comp.accent,
                   }} />
+                  {/* Opponent badge */}
                   <ClubBadge name={oppName} size={20} />
                 </div>
               ) : (
-                <div style={{ height: 26 }} />
+                /* Spacer to keep rows aligned */
+                <div style={{ height: 25 }} />
               )}
             </div>
           );
@@ -538,10 +631,9 @@ function PreviewTab({ nextFixture, myClub, myRating, oppRating, onPlay, results 
     );
   }
 
-  const comp     = getComp(nextFixture.competition);
-  const oppName  = nextFixture.isHome ? nextFixture.away : nextFixture.home;
-  const myColor  = CLUB_COLOR[myClub?.name] || '#00e87a';
-  const myForm   = results.slice(-5).map(r =>
+  const comp    = getComp(nextFixture.competition);
+  const myColor = CLUB_COLOR[myClub?.name] || '#00e87a';
+  const myForm  = results.slice(-5).map(r =>
     r.myGoals > r.oppGoals ? 'W' : r.myGoals === r.oppGoals ? 'D' : 'L'
   );
 
@@ -579,7 +671,7 @@ function PreviewTab({ nextFixture, myClub, myRating, oppRating, onPlay, results 
             <span style={{ fontFamily: 'var(--font-mono)', fontSize: 7, color: 'var(--text-muted)', letterSpacing: 2 }}>OVR</span>
           </div>
 
-          {/* VS divider */}
+          {/* VS */}
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
             <span style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 900, color: 'var(--text-muted)' }}>VS</span>
             <div style={{ width: 1, height: 36, background: 'var(--border)' }} />
@@ -611,8 +703,8 @@ function PreviewTab({ nextFixture, myClub, myRating, oppRating, onPlay, results 
             ['MID', Math.round(myRating * 0.99), Math.round(oppRating * 1.01)],
             ['DEF', Math.round(myRating * 0.97), Math.round(oppRating * 1.03)],
           ].map(([label, mv, ov]) => {
-            const total = mv + ov;
-            const pct = Math.round((mv / total) * 100);
+            const total = mv + ov || 1;
+            const pct   = Math.round((mv / total) * 100);
             return (
               <div key={label}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
@@ -622,7 +714,7 @@ function PreviewTab({ nextFixture, myClub, myRating, oppRating, onPlay, results 
                 </div>
                 <div style={{ height: 3, background: 'var(--bg-5)', borderRadius: 2, overflow: 'hidden', display: 'flex' }}>
                   <div style={{ width: `${pct}%`, background: myColor }} />
-                  <div style={{ flex: 1, background: '#444' }} />
+                  <div style={{ flex: 1, background: '#333' }} />
                 </div>
               </div>
             );
@@ -674,7 +766,7 @@ function PreviewTab({ nextFixture, myClub, myRating, oppRating, onPlay, results 
 
 function ResultsTab({ results, fixtures }) {
   const [compFilter, setCompFilter] = useState('All');
-  const [expanded, setExpanded] = useState(null);
+  const [expanded, setExpanded]     = useState(null);
 
   const comps = useMemo(() => {
     const s = new Set(results.map(r => r.competition));
@@ -685,7 +777,6 @@ function ResultsTab({ results, fixtures }) {
 
   return (
     <div style={{ paddingBottom: 20 }}>
-      {/* Competition filter */}
       <div style={{
         display: 'flex', gap: 6, overflowX: 'auto', padding: '12px 16px',
         scrollbarWidth: 'none', borderBottom: '1px solid var(--border)',
@@ -726,7 +817,6 @@ function ResultsTab({ results, fixtures }) {
               borderLeft: `3px solid ${comp.accent}`,
               background: isOpen ? 'var(--bg-2)' : 'transparent',
             }}>
-              {/* W/D/L badge */}
               <div style={{
                 width: 24, height: 24, borderRadius: 5, flexShrink: 0,
                 background: `${rc}18`, border: `1px solid ${rc}44`,
@@ -782,23 +872,23 @@ function ResultsTab({ results, fixtures }) {
 ═══════════════════════════════════════════════ */
 
 function PreMatchFlow({ fixture, myClub, myRating, oppRating, squad, onKickOff, onBack }) {
-  const [step, setStep] = useState('conference');
+  const [step, setStep]           = useState('conference');
   const [confSkipped, setConfSkipped] = useState(false);
-  const [confQs] = useState(() =>
+  const [confQs]     = useState(() =>
     [...PRE_QUESTIONS].sort(() => Math.random() - 0.5).slice(0, 3).map(q => ({
       ...q, answers: [...q.answers].sort(() => Math.random() - 0.5),
     }))
   );
-  const [confIdx, setConfIdx] = useState(0);
+  const [confIdx, setConfIdx]     = useState(0);
   const [confResult, setConfResult] = useState(null);
-  const [confDone, setConfDone] = useState(false);
+  const [confDone, setConfDone]   = useState(false);
   const [confBonus, setConfBonus] = useState({ morale: 0, rating: 0 });
   const [formation, setFormation] = useState(FORMATIONS[0]);
   const [selectedTalk, setSelectedTalk] = useState(null);
-  const [lineup, setLineup] = useState([]);
+  const [lineup, setLineup]       = useState([]);
 
-  const comp = getComp(fixture.competition);
-  const myColor = CLUB_COLOR[myClub?.name] || '#00e87a';
+  const comp     = getComp(fixture.competition);
+  const myColor  = CLUB_COLOR[myClub?.name] || '#00e87a';
   const positions = FORMATION_POSITIONS[formation] || FORMATION_POSITIONS['4-3-3'];
 
   useEffect(() => {
@@ -828,7 +918,6 @@ function PreMatchFlow({ fixture, myClub, myRating, oppRating, squad, onKickOff, 
     onKickOff({ talkBonus: talk?.bonus || 0, tactic: talk?.tactic || 'balanced', confBonus, lineup, formation, talk });
   }
 
-  /* Step bar */
   const StepBar = () => (
     <div style={{ display: 'flex', gap: 4, padding: '12px 16px 0' }}>
       {steps.map((s, i) => (
@@ -841,7 +930,6 @@ function PreMatchFlow({ fixture, myClub, myRating, oppRating, squad, onKickOff, 
     </div>
   );
 
-  /* Nav row */
   const NavRow = ({ title, onLeft, leftLabel = 'Back', onRight, rightLabel }) => (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 16px 4px' }}>
       <button onClick={onLeft} style={{
@@ -910,7 +998,6 @@ function PreMatchFlow({ fixture, myClub, myRating, oppRating, squad, onKickOff, 
           </div>
         ) : (
           <div style={{ flex: 1, padding: '28px 16px', display: 'flex', flexDirection: 'column', gap: 20 }}>
-            {/* Question card */}
             <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
               <div style={{
                 width: 42, height: 42, borderRadius: '50%', flexShrink: 0,
@@ -934,29 +1021,24 @@ function PreMatchFlow({ fixture, myClub, myRating, oppRating, squad, onKickOff, 
               </div>
             </div>
 
-            {/* Answers */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {q.answers.map((ans, i) => {
-                const isSelected = confResult && i === q.answers.indexOf(ans);
-                return (
-                  <button key={i}
-                    onClick={() => { if (!confResult) handleAnswer(ans); }}
-                    style={{
-                      padding: '13px 15px', borderRadius: 9, textAlign: 'left',
-                      cursor: confResult ? 'default' : 'pointer',
-                      background: 'var(--bg-3)', border: '1px solid var(--border)',
-                      transition: 'all 0.2s',
-                    }}
-                  >
-                    <span style={{ fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--text)', lineHeight: 1.45 }}>
-                      {ans.text}
-                    </span>
-                  </button>
-                );
-              })}
+              {q.answers.map((ans, i) => (
+                <button key={i}
+                  onClick={() => { if (!confResult) handleAnswer(ans); }}
+                  style={{
+                    padding: '13px 15px', borderRadius: 9, textAlign: 'left',
+                    cursor: confResult ? 'default' : 'pointer',
+                    background: 'var(--bg-3)', border: '1px solid var(--border)',
+                    transition: 'all 0.2s',
+                  }}
+                >
+                  <span style={{ fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--text)', lineHeight: 1.45 }}>
+                    {ans.text}
+                  </span>
+                </button>
+              ))}
             </div>
 
-            {/* Effect flash */}
             {confResult && (
               <div style={{
                 padding: '11px 16px', borderRadius: 8, textAlign: 'center',
@@ -984,7 +1066,6 @@ function PreMatchFlow({ fixture, myClub, myRating, oppRating, squad, onKickOff, 
         <StepBar />
         <NavRow title="TEAM SELECTION" onLeft={() => setStep('conference')} />
 
-        {/* Formation pills */}
         <div style={{ overflowX: 'auto', scrollbarWidth: 'none', padding: '10px 16px' }}>
           <div style={{ display: 'flex', gap: 6 }}>
             {FORMATIONS.map(f => (
@@ -1000,7 +1081,6 @@ function PreMatchFlow({ fixture, myClub, myRating, oppRating, squad, onKickOff, 
           </div>
         </div>
 
-        {/* Pitch SVG */}
         <div style={{ margin: '0 16px', borderRadius: 10, overflow: 'hidden', border: '1px solid rgba(255,255,255,0.07)' }}>
           <svg viewBox="0 0 100 100" style={{ width: '100%', display: 'block' }}>
             <defs>
@@ -1035,7 +1115,6 @@ function PreMatchFlow({ fixture, myClub, myRating, oppRating, squad, onKickOff, 
           </svg>
         </div>
 
-        {/* Lineup list */}
         <div style={{ padding: '14px 16px', flex: 1, overflowY: 'auto' }}>
           <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: 'var(--text-muted)', letterSpacing: 3, textTransform: 'uppercase', marginBottom: 10 }}>
             Starting XI
@@ -1139,21 +1218,24 @@ export default function Matchday() {
   const store = useGameStore();
   const { squad, myClub, allClubs, season = 1, results = [], addResult, advanceWeek } = store;
 
-  const [tab, setTab]                 = useState('preview');
-  const [screen, setScreen]           = useState('calendar'); // calendar | prematch | livesim | postmatch
+  const [tab, setTab]                     = useState('preview');
+  const [screen, setScreen]               = useState('calendar');
   const [activeFixture, setActiveFixture] = useState(null);
-  const [currentDay, setCurrentDay]   = useState(1);
+  const [currentDay, setCurrentDay]       = useState(1);
 
-  /* Match state — only set after runMatch() */
-  const [matchResult, setMatchResult] = useState(null); // full result object from matchEngine
-  const [simEvents, setSimEvents]     = useState([]);
-  const [simMinute, setSimMinute]     = useState(0);
-  const [simFinished, setSimFinished] = useState(false);
-  const [simSpeed, setSimSpeed]       = useState(1);
-  const [matchLineup, setMatchLineup] = useState([]);
+  /* Match state */
+  const [matchResult, setMatchResult]   = useState(null);
+  const [simEvents, setSimEvents]       = useState([]);
+  const [simMinute, setSimMinute]       = useState(0);
+  /* ─── FIX: score is derived only from streamed events, not from matchResult directly ─── */
+  const [simMyGoals, setSimMyGoals]     = useState(0);
+  const [simOppGoals, setSimOppGoals]   = useState(0);
+  const [simFinished, setSimFinished]   = useState(false);
+  const [simSpeed, setSimSpeed]         = useState(1);
+  const [matchLineup, setMatchLineup]   = useState([]);
 
-  const simRef   = useRef(null);
-  const speedRef = useRef(1);
+  const simRef    = useRef(null);
+  const speedRef  = useRef(1);
   const evtIdxRef = useRef(0);
 
   /* Fixtures */
@@ -1162,10 +1244,10 @@ export default function Matchday() {
     return generateFixtures(myClub, allClubs, season);
   }, [myClub, allClubs, season]);
 
-  const playedIds      = useMemo(() => new Set(results.map(r => r.fixtureId)), [results]);
-  const myRating       = useMemo(() => getTeamRating(squad), [squad]);
-  const upcomingFix    = fixtures.filter(f => !playedIds.has(f.id));
-  const nextFixture    = upcomingFix[0] || null;
+  const playedIds   = useMemo(() => new Set(results.map(r => r.fixtureId)), [results]);
+  const myRating    = useMemo(() => getTeamRating(squad), [squad]);
+  const upcomingFix = fixtures.filter(f => !playedIds.has(f.id));
+  const nextFixture = upcomingFix[0] || null;
 
   function getOppRating(fixture) {
     if (!fixture) return 72;
@@ -1176,7 +1258,6 @@ export default function Matchday() {
       : 72;
   }
 
-  /* ── Calendar day tap ── */
   function handleDayTap(day, fixture) {
     if (day > currentDay) setCurrentDay(day);
     if (fixture && !playedIds.has(fixture.id)) {
@@ -1192,33 +1273,34 @@ export default function Matchday() {
     }
   }
 
-  /* ── Kick off: run full match engine, then stream events ── */
+  /* ── Kick off ── */
   function handleKickOff({ talkBonus, tactic, confBonus, lineup, formation }) {
     setMatchLineup(lineup || []);
 
     const oppName   = activeFixture.isHome ? activeFixture.away : activeFixture.home;
     const oppRating = getOppRating(activeFixture);
 
-    /* Run the engine — get all events upfront, reveal progressively */
     const result = runMatch({
-      mySquad: lineup?.length ? lineup : squad,
-      myRating: myRating + (talkBonus || 0) + (confBonus?.rating || 0),
+      mySquad:    lineup?.length ? lineup : squad,
+      myRating:   myRating + (talkBonus || 0) + (confBonus?.rating || 0),
       oppRating,
       oppClubName: oppName,
-      tactic: tactic || 'balanced',
-      isHome: activeFixture.isHome,
+      tactic:      tactic || 'balanced',
+      isHome:      activeFixture.isHome,
     });
 
     setMatchResult(result);
     setSimEvents([]);
     setSimMinute(0);
+    /* ─── Reset live score counters to 0 — they build up as events stream ─── */
+    setSimMyGoals(0);
+    setSimOppGoals(0);
     setSimFinished(false);
     setSimSpeed(1);
     speedRef.current = 1;
     evtIdxRef.current = 0;
     setScreen('livesim');
 
-    /* Stream events one by one */
     function startTick() {
       clearInterval(simRef.current);
       simRef.current = setInterval(() => {
@@ -1229,8 +1311,21 @@ export default function Matchday() {
           return;
         }
         const ev = result.events[idx];
-        setSimEvents(prev => [...prev, ev]);
+
+        /* Strip any numeric prefix from commentary text before appending */
+        const cleanEv = {
+          ...ev,
+          text: (ev.text || '').replace(/^\d+'\s*/, '').replace(/^\d+\s+/, ''),
+        };
+
+        setSimEvents(prev => [...prev, cleanEv]);
         setSimMinute(ev.min);
+
+        /* Update live score ONLY when a goal event is streamed */
+        if (ev.type === 'goal' && ev.side === 'my')  setSimMyGoals(g => g + 1);
+        if (ev.type === 'goal' && ev.side === 'opp') setSimOppGoals(g => g + 1);
+        if (ev.type === 'goalOpp')                   setSimOppGoals(g => g + 1);
+
         evtIdxRef.current = idx + 1;
       }, Math.round(750 / speedRef.current));
     }
@@ -1242,7 +1337,6 @@ export default function Matchday() {
   function handleSpeedChange(s) {
     setSimSpeed(s);
     speedRef.current = s;
-    /* Restart interval at new speed without resetting position */
     clearInterval(simRef.current);
     simRef.current = setInterval(() => {
       const idx = evtIdxRef.current;
@@ -1251,9 +1345,16 @@ export default function Matchday() {
         setSimFinished(true);
         return;
       }
-      const ev = matchResult.events[idx];
-      setSimEvents(prev => [...prev, ev]);
+      const ev = result.events[idx];
+      const cleanEv = {
+        ...ev,
+        text: (ev.text || '').replace(/^\d+'\s*/, '').replace(/^\d+\s+/, ''),
+      };
+      setSimEvents(prev => [...prev, cleanEv]);
       setSimMinute(ev.min);
+      if (ev.type === 'goal' && ev.side === 'my')  setSimMyGoals(g => g + 1);
+      if (ev.type === 'goal' && ev.side === 'opp') setSimOppGoals(g => g + 1);
+      if (ev.type === 'goalOpp')                   setSimOppGoals(g => g + 1);
       evtIdxRef.current = idx + 1;
     }, Math.round(750 / s));
   }
@@ -1261,7 +1362,17 @@ export default function Matchday() {
   /* ── Skip to result ── */
   function handleFinish() {
     clearInterval(simRef.current);
-    if (matchResult) setSimEvents(matchResult.events);
+    if (matchResult) {
+      /* Show all events at once, cleaned */
+      const cleaned = matchResult.events.map(ev => ({
+        ...ev,
+        text: (ev.text || '').replace(/^\d+'\s*/, '').replace(/^\d+\s+/, ''),
+      }));
+      setSimEvents(cleaned);
+      /* Set final scores from the engine result */
+      setSimMyGoals(matchResult.myGoals);
+      setSimOppGoals(matchResult.oppGoals);
+    }
     setSimFinished(true);
     setScreen('postmatch');
   }
@@ -1295,6 +1406,8 @@ export default function Matchday() {
     setActiveFixture(null);
     setMatchResult(null);
     setSimEvents([]);
+    setSimMyGoals(0);
+    setSimOppGoals(0);
     evtIdxRef.current = 0;
   }
 
@@ -1321,6 +1434,8 @@ export default function Matchday() {
       <LiveSim
         fixture={activeFixture}
         myClubName={myClub?.name}
+        myGoals={simMyGoals}
+        oppGoals={simOppGoals}
         events={simEvents}
         minute={simMinute}
         isFinished={simFinished}
@@ -1339,13 +1454,13 @@ export default function Matchday() {
     return (
       <PostMatch
         fixture={activeFixture}
+        myClubName={myClub?.name}
         myGoals={matchResult.myGoals}
         oppGoals={matchResult.oppGoals}
         squad={squad}
         events={simEvents}
-        stats={matchResult.stats}
-        ratedSquad={matchResult.ratedSquad}
-        motm={matchResult.motm}
+        myXg={matchResult.myXg}
+        oppXg={matchResult.oppXg}
         lineup={matchLineup}
         onContinue={handleContinue}
       />
@@ -1353,11 +1468,11 @@ export default function Matchday() {
   }
 
   /* ── CALENDAR VIEW ── */
+
+  /* Tab bar height is measured after render to offset content correctly */
   return (
     <>
-      <style>{`
-        * { -webkit-tap-highlight-color: transparent; }
-      `}</style>
+      <style>{`* { -webkit-tap-highlight-color: transparent; }`}</style>
 
       <div style={{ minHeight: '100vh', background: 'var(--bg-1)', paddingBottom: 100 }}>
 
@@ -1368,11 +1483,19 @@ export default function Matchday() {
           playedIds={playedIds}
         />
 
-        {/* Tab bar */}
+        {/* Tab bar — sticky directly below the CalendarStrip.
+            We DON'T hardcode `top` here because CalendarStrip height varies.
+            Instead we let it flow naturally with position:sticky and a high z-index.
+            The content below scrolls under it. */}
         <div style={{
-          display: 'flex', borderBottom: '1px solid var(--border)',
-          background: 'var(--bg-1)', position: 'sticky',
-          top: 52 + 72, zIndex: 9,
+          display: 'flex',
+          borderBottom: '1px solid var(--border)',
+          background: 'var(--bg-1)',
+          position: 'sticky',
+          /* CalendarStrip sticks at top:52. Its height is ~100px (header 28 + strip 72).
+             Tab bar sticks immediately below it. */
+          top: 152,
+          zIndex: 9,
         }}>
           {['preview', 'results'].map(t => (
             <button key={t} onClick={() => setTab(t)} style={{
