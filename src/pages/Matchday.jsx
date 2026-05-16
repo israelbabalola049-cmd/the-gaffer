@@ -518,23 +518,19 @@ function CalendarStrip({ fixtures, currentDay, onDayTap, playedIds }) {
         borderBottom: '1px solid var(--border)',
       }}
     >
-      {/* Month / season label row */}
+      {/* Month label row — compact */}
       <div style={{
-        padding: '7px 16px 4px',
-        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        padding: '5px 16px 2px',
+        display: 'flex', alignItems: 'center', gap: 6,
       }}>
         <span style={{
           fontFamily: 'var(--font-mono)', fontSize: 8,
           color: 'var(--text-muted)', letterSpacing: 3, textTransform: 'uppercase',
         }}>
-          {currentDayInfo.monthName.toUpperCase()} · {currentDayInfo.year}
+          {currentDayInfo.monthName.toUpperCase()} {currentDayInfo.year}
         </span>
-        <span style={{
-          fontFamily: 'var(--font-mono)', fontSize: 8,
-          color: 'var(--green)', letterSpacing: 2, textTransform: 'uppercase',
-        }}>
-          Season 1
-        </span>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 7, color: 'var(--text-muted)', opacity: 0.4 }}>·</span>
+        <span style={{ fontFamily: 'var(--font-mono)', fontSize: 7, color: 'var(--text-muted)', letterSpacing: 2, textTransform: 'uppercase', opacity: 0.5 }}>S1</span>
       </div>
 
       {/* Scrollable day strip */}
@@ -543,13 +539,9 @@ function CalendarStrip({ fixtures, currentDay, onDayTap, playedIds }) {
         style={{
           display: 'flex', overflowX: 'auto', scrollbarWidth: 'none',
           WebkitOverflowScrolling: 'touch',
-          paddingBottom: 8,
+          paddingBottom: 6,
         }}
       >
-        <style>{`
-          .cal-strip::-webkit-scrollbar { display: none; }
-        `}</style>
-
         {days.map(({ gameDay, dom, monthName, dayName, fixtures: dayFix }) => {
           const isCurrent = gameDay === currentDay;
           const isPast    = gameDay < currentDay;
@@ -1333,7 +1325,6 @@ export default function Matchday() {
     startTick();
   }
 
-  /* ── Speed change ── */
   function handleSpeedChange(s) {
     setSimSpeed(s);
     speedRef.current = s;
@@ -1345,7 +1336,7 @@ export default function Matchday() {
         setSimFinished(true);
         return;
       }
-      const ev = result.events[idx];
+      const ev = matchResult.events[idx];
       const cleanEv = {
         ...ev,
         text: (ev.text || '').replace(/^\d+'\s*/, '').replace(/^\d+\s+/, ''),
@@ -1469,32 +1460,64 @@ export default function Matchday() {
 
   /* ── CALENDAR VIEW ── */
 
-  /* Tab bar height is measured after render to offset content correctly */
+  /*
+   * Layout stacking (all position:sticky, z-index descending):
+   *   Global nav bar        — rendered by Layout, height 52px, top:0,  z:30
+   *   CalendarStrip         — top:52, z:15  (sticks just below nav)
+   *   Tab bar               — top: 52 + calendarH, z:9  (sticks below calendar)
+   *
+   * We measure CalendarStrip's rendered height with a ResizeObserver so the
+   * tab bar offset is always exact regardless of content changes.
+   *
+   * The outer wrapper has NO top padding — Layout's <main> already provides
+   * the 52px offset. Adding paddingTop here would create the double-gap.
+   */
+  const calRef        = useRef(null);
+  const [calH, setCalH] = useState(100);
+
+  useEffect(() => {
+    if (!calRef.current) return;
+    const ro = new ResizeObserver(entries => {
+      const h = entries[0]?.contentRect?.height;
+      if (h) setCalH(Math.round(h));
+    });
+    ro.observe(calRef.current);
+    return () => ro.disconnect();
+  }, []);
+
+  const NAV_H    = 52;          // global nav bar height
+  const TAB_TOP  = NAV_H + calH; // exact pixel where tab bar sticks
+
   return (
     <>
-      <style>{`* { -webkit-tap-highlight-color: transparent; }`}</style>
+      <style>{`
+        * { -webkit-tap-highlight-color: transparent; }
+        div::-webkit-scrollbar { display: none; }
+      `}</style>
 
-      <div style={{ minHeight: '100vh', background: 'var(--bg-1)', paddingBottom: 100 }}>
+      {/*
+       * margin-top: 0  — Layout already offsets by 52px for the nav.
+       * No additional paddingTop here.
+       */}
+      <div style={{ minHeight: '100vh', background: 'var(--bg-1)', paddingBottom: 100, marginTop: 0 }}>
 
-        <CalendarStrip
-          fixtures={fixtures}
-          currentDay={currentDay}
-          onDayTap={handleDayTap}
-          playedIds={playedIds}
-        />
+        {/* CalendarStrip — ref so we can measure its height */}
+        <div ref={calRef}>
+          <CalendarStrip
+            fixtures={fixtures}
+            currentDay={currentDay}
+            onDayTap={handleDayTap}
+            playedIds={playedIds}
+          />
+        </div>
 
-        {/* Tab bar — sticky directly below the CalendarStrip.
-            We DON'T hardcode `top` here because CalendarStrip height varies.
-            Instead we let it flow naturally with position:sticky and a high z-index.
-            The content below scrolls under it. */}
+        {/* Tab bar — sticks at exactly (nav height + calendar height) */}
         <div style={{
           display: 'flex',
           borderBottom: '1px solid var(--border)',
           background: 'var(--bg-1)',
           position: 'sticky',
-          /* CalendarStrip sticks at top:52. Its height is ~100px (header 28 + strip 72).
-             Tab bar sticks immediately below it. */
-          top: 152,
+          top: TAB_TOP,
           zIndex: 9,
         }}>
           {['preview', 'results'].map(t => (
