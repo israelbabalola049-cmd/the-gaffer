@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import useGameStore from '../store/gameStore';
 import LiveSim from '../matchday/LiveSim';
 import PostMatch from '../matchday/PostMatch';
-import { runMatch } from '../matchday/matchEngine';
+import { simulateFullMatch as runMatch } from '../matchday/matchEngine';
 
 /* ═══════════════════════════════════════════════
    CONSTANTS
@@ -1266,19 +1266,22 @@ export default function Matchday() {
   }
 
   /* ── Kick off ── */
-  function handleKickOff({ talkBonus, tactic, confBonus, lineup, formation }) {
+  function handleKickOff({ talkBonus, tactic, confBonus, lineup, formation, talk }) {
     setMatchLineup(lineup || []);
 
     const oppName   = activeFixture.isHome ? activeFixture.away : activeFixture.home;
-    const oppRating = getOppRating(activeFixture);
+    const oppClub   = allClubs?.find(c => c.name === oppName);
+    const oppBudget = oppClub?.budget || 0;
 
     const result = runMatch({
-      mySquad:    lineup?.length ? lineup : squad,
-      myRating:   myRating + (talkBonus || 0) + (confBonus?.rating || 0),
-      oppRating,
-      oppClubName: oppName,
-      tactic:      tactic || 'balanced',
-      isHome:      activeFixture.isHome,
+      mySquad:      lineup?.length ? lineup : squad,
+      oppClubName:  oppName,
+      oppClubBudget: oppBudget,
+      isHome:       activeFixture.isHome,
+      tactics:      tactic || 'balanced',
+      teamTalkId:   talk?.id || 'simple',
+      confBonus:    confBonus?.morale || 0,
+      moraleMap:    {},
     });
 
     setMatchResult(result);
@@ -1368,7 +1371,6 @@ export default function Matchday() {
     setScreen('postmatch');
   }
 
-  /* ── Continue after postmatch ── */
   function handleContinue() {
     if (!activeFixture || !matchResult) return;
 
