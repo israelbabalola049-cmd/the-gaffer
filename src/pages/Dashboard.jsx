@@ -1,24 +1,13 @@
 import { useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import useGameStore from '../store/gameStore';
 
-/* ── helpers ── */
 const fmt = (n) => {
   if (!n) return '—';
   if (n >= 1e9) return `£${(n / 1e9).toFixed(1)}B`;
   if (n >= 1e6) return `£${(n / 1e6).toFixed(1)}M`;
   if (n >= 1e3) return `£${(n / 1e3).toFixed(0)}K`;
   return `£${n}`;
-};
-
-const CLUB_BADGE_URL = {
-  'Manchester City':   'https://resources.premierleague.com/premierleague/badges/50/t43.png',
-  'Liverpool':         'https://resources.premierleague.com/premierleague/badges/50/t14.png',
-  'Arsenal':           'https://resources.premierleague.com/premierleague/badges/50/t3.png',
-  'Chelsea':           'https://resources.premierleague.com/premierleague/badges/50/t8.png',
-  'Manchester United': 'https://resources.premierleague.com/premierleague/badges/50/t1.png',
-  'Tottenham':         'https://resources.premierleague.com/premierleague/badges/50/t6.png',
-  'Aston Villa':       'https://resources.premierleague.com/premierleague/badges/50/t7.png',
-  'Brighton':          'https://resources.premierleague.com/premierleague/badges/50/t36.png',
 };
 
 const CLUB_COLOR = {
@@ -31,92 +20,95 @@ const CLUB_COLOR = {
   'Borussia Dortmund': '#FDE100', 'Juventus': '#555',
 };
 
-function MiniClubBadge({ name, size = 28 }) {
-  const url = CLUB_BADGE_URL[name];
-  const color = CLUB_COLOR[name] || '#888';
-  const abbr = name?.slice(0, 3).toUpperCase() || '?';
-  if (url) return <img src={url} alt={name} style={{ width: size, height: size, objectFit: 'contain', flexShrink: 0 }} onError={e => e.target.style.display = 'none'} />;
-  return (
-    <div style={{
-      width: size, height: size, borderRadius: 4, flexShrink: 0,
-      background: `linear-gradient(135deg, ${color}22, ${color}44)`,
-      border: `1px solid ${color}44`,
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      fontFamily: 'var(--font-display)', fontSize: size * 0.3, color, letterSpacing: 0.5,
-    }}>{abbr}</div>
-  );
-}
+const CLUB_IMAGES = {
+  'Manchester City': [
+    'https://images.unsplash.com/photo-1508098682722-e99c43a406b2?w=600&q=80',
+    'https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=600&q=80',
+    'https://images.unsplash.com/photo-1543326727-cf6c39e8f84c?w=600&q=80',
+    'https://images.unsplash.com/photo-1489944440615-453fc2b6a9a9?w=600&q=80',
+    'https://images.unsplash.com/photo-1517466787929-bc90951d0974?w=600&q=80',
+  ],
+  default: [
+    'https://images.unsplash.com/photo-1508098682722-e99c43a406b2?w=600&q=80',
+    'https://images.unsplash.com/photo-1574629810360-7efbbe195018?w=600&q=80',
+    'https://images.unsplash.com/photo-1543326727-cf6c39e8f84c?w=600&q=80',
+    'https://images.unsplash.com/photo-1489944440615-453fc2b6a9a9?w=600&q=80',
+    'https://images.unsplash.com/photo-1517466787929-bc90951d0974?w=600&q=80',
+  ],
+};
 
-function Card({ children, style }) {
-  return (
-    <div style={{
-      background: 'var(--bg-3)',
-      border: '1px solid var(--border)',
-      borderRadius: 10,
-      overflow: 'hidden',
-      ...style,
-    }}>
-      {children}
-    </div>
-  );
-}
-
-function CardHeader({ label, accent }) {
-  return (
-    <div style={{
-      padding: '9px 14px',
-      borderBottom: '1px solid var(--border)',
-      display: 'flex', alignItems: 'center', gap: 8,
-    }}>
-      {accent && <div style={{ width: 3, height: 12, borderRadius: 2, background: accent, flexShrink: 0 }} />}
-      <span style={{
-        fontFamily: 'var(--font-mono)', fontSize: 9,
-        color: 'var(--text-muted)', letterSpacing: 3,
-        textTransform: 'uppercase',
-      }}>{label}</span>
-    </div>
-  );
-}
-
-function FormDot({ result }) {
-  const color = result === 'W' ? 'var(--green)' : result === 'D' ? 'var(--yellow)' : 'var(--red)';
-  return (
-    <div style={{
-      width: 28, height: 28, borderRadius: 4,
-      background: `${color === 'var(--green)' ? 'rgba(0,232,122,0.12)' : color === 'var(--yellow)' ? 'rgba(245,197,24,0.12)' : 'rgba(255,59,92,0.12)'}`,
-      border: `1px solid ${color === 'var(--green)' ? 'rgba(0,232,122,0.35)' : color === 'var(--yellow)' ? 'rgba(245,197,24,0.35)' : 'rgba(255,59,92,0.35)'}`,
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      fontFamily: 'var(--font-display)', fontSize: 12, fontWeight: 700, color,
-    }}>{result}</div>
-  );
+function getNewsImages(clubName) {
+  return CLUB_IMAGES[clubName] || CLUB_IMAGES.default;
 }
 
 function generateNews(club, squad) {
-  const topPlayer = squad?.slice().sort((a, b) => b.overall - a.overall)[0];
+  const top = squad?.slice().sort((a, b) => b.overall - a.overall)[0];
   return [
-    { tag: 'TRANSFER', text: `${club?.name} linked with summer reinforcements as the board backs new signings.` },
-    { tag: 'FORM',     text: `Squad morale remains high ahead of the upcoming fixture run.` },
-    { tag: 'SCOUT',    text: topPlayer ? `${topPlayer.name} continues to attract interest from top clubs across Europe.` : 'Scouts report positive findings on potential targets.' },
-    { tag: 'BOARD',    text: `Board confident in the manager's project as the season gets underway.` },
-    { tag: 'INJURY',   text: `Medical team reports the squad is in good health ahead of the next match.` },
+    { text: `${club?.name || 'Club'} linked with summer reinforcements as the board backs new signings ahead of the window.`, date: '2d ago' },
+    { text: `Squad morale remains high ahead of the upcoming fixture run. Players responding well in training.`, date: '3d ago' },
+    { text: top ? `${top.name} continues to attract interest from top clubs across Europe.` : 'Scouts report positive findings from latest assessment.', date: '4d ago' },
+    { text: `Board confident in the manager's project as the season gets underway. Facilities investment approved.`, date: '5d ago' },
+    { text: `Youth academy graduate earns first team call-up after impressive performances this week.`, date: '6d ago' },
   ];
 }
 
-/* ── Main ── */
+const DUMMY_TABLE = [
+  { name: 'Man City',   pts: 0 },
+  { name: 'Arsenal',    pts: 0 },
+  { name: 'Liverpool',  pts: 0 },
+  { name: 'Chelsea',    pts: 0 },
+  { name: 'Spurs',      pts: 0 },
+  { name: 'Man United', pts: 0 },
+];
+
+const OBJECTIVES = [
+  { title: 'Win the league',  current: 0, target: 38 },
+  { title: 'Reach Cup Final', current: 0, target: 5  },
+  { title: 'Score 80 goals',  current: 0, target: 80 },
+  { title: '15 clean sheets', current: 0, target: 15 },
+];
+
+// No accent on top — plain card
+const cardBase = () => ({
+  background: 'rgba(10,14,22,0.92)',
+  border: '1px solid rgba(255,255,255,0.07)',
+  overflow: 'hidden',
+  display: 'flex',
+  flexDirection: 'column',
+  minHeight: 0,
+  minWidth: 0,
+});
+
+// News card — same as all other cards, no accent
+const newsCard = () => ({
+  background: 'rgba(10,14,22,0.92)',
+  border: '1px solid rgba(255,255,255,0.07)',
+  overflow: 'hidden',
+  display: 'flex',
+  flexDirection: 'column',
+  minHeight: 0,
+  minWidth: 0,
+});
+
+const Label = ({ text, color = '#556070' }) => (
+  <div style={{
+    padding: '5px 10px',
+    borderBottom: '1px solid rgba(255,255,255,0.06)',
+    fontFamily: "'Barlow Condensed', sans-serif",
+    fontSize: 9, fontWeight: 700, fontStyle: 'italic',
+    letterSpacing: 3, textTransform: 'uppercase',
+    color, flexShrink: 0,
+  }}>{text}</div>
+);
+
+const DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
 export default function Dashboard() {
+  const navigate = useNavigate();
   const { myClub, squad, results, season, week, budget } = useGameStore();
 
-  const topPerformer = useMemo(() =>
-    squad?.length ? squad.slice().sort((a, b) => b.overall - a.overall)[0] : null
-  , [squad]);
-
-  const form = useMemo(() =>
-    (results || []).slice(-5).map(r => {
-      const mg = r.isHome ? r.homeGoals : r.awayGoals;
-      const og = r.isHome ? r.awayGoals : r.homeGoals;
-      return mg > og ? 'W' : mg === og ? 'D' : 'L';
-    })
-  , [results]);
+  const accent = myClub?.color || CLUB_COLOR[myClub?.name] || '#00e87a';
 
   const wdl = useMemo(() => {
     const calc = (fn) => (results || []).filter(r => {
@@ -124,285 +116,252 @@ export default function Dashboard() {
       const og = r.isHome ? r.awayGoals : r.homeGoals;
       return fn(mg, og);
     }).length;
-    return {
-      w: calc((m, o) => m > o),
-      d: calc((m, o) => m === o),
-      l: calc((m, o) => m < o),
-    };
+    return { w: calc((m,o) => m>o), d: calc((m,o) => m===o), l: calc((m,o) => m<o) };
   }, [results]);
 
-  const lastResult = results?.length ? results[results.length - 1] : null;
-  const accentColor = CLUB_COLOR[myClub?.name] || '#00e87a';
   const newsItems = generateNews(myClub, squad);
+  const newsImages = getNewsImages(myClub?.name);
+
+  const isMatchday = false;
+
+  // Build a 7-day mini calendar grid — current week
+  const today = new Date();
+  const todayDate = today.getDate();
+  const todayDay = today.getDay(); // 0=Sun
+  // Start from Monday of this week
+  const weekDays = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(today);
+    const diff = i - ((todayDay + 6) % 7); // shift so Monday=0
+    d.setDate(today.getDate() + diff);
+    return {
+      label: DAYS[(d.getDay())],
+      date: d.getDate(),
+      isToday: d.getDate() === todayDate && d.getMonth() === today.getMonth(),
+      isMatch: i === 2 || i === 5, // stub matchdays
+    };
+  });
+
+  // Grid layout — 8 cols × 4 rows
+  // Play/Train: cols 5-7, row 1-2 (2 wide, 1 tall = spans 2 cols, 1 row... but rows are equal so 1 row = half height)
+  // Calendar:   cols 7-9, row 1-2
+  // So both span 2 columns each and only 1 row tall
+  const areas = {
+    news:       { gridColumn: '1 / 5', gridRow: '1 / 4' },
+    objectives: { gridColumn: '1 / 5', gridRow: '4 / 5' },
+    playtrain:  { gridColumn: '5 / 7', gridRow: '1 / 2' },
+    calendar:   { gridColumn: '7 / 9', gridRow: '1 / 2' },
+    standings:  { gridColumn: '5 / 7', gridRow: '2 / 5' },
+    inbox:      { gridColumn: '7 / 9', gridRow: '2 / 5' },
+  };
 
   return (
     <>
       <style>{`
-        @keyframes dashIn { from { opacity:0; transform:translateY(8px) } to { opacity:1; transform:translateY(0) } }
-        .ds { animation: dashIn 0.35s ease both; }
-        .ds:nth-child(1){animation-delay:.04s} .ds:nth-child(2){animation-delay:.08s}
-        .ds:nth-child(3){animation-delay:.12s} .ds:nth-child(4){animation-delay:.16s}
-        .ds:nth-child(5){animation-delay:.20s} .ds:nth-child(6){animation-delay:.24s}
-        .ds:nth-child(7){animation-delay:.28s} .ds:nth-child(8){animation-delay:.32s}
-        .ds:nth-child(9){animation-delay:.36s}
-        .news-row:hover { background: rgba(255,255,255,0.03) !important; }
+        .db-news-item { transition: opacity 0.15s; cursor: default; }
+        .db-news-item:hover { opacity: 0.85; }
+        .db-btn { transition: filter 0.15s, transform 0.1s; cursor: pointer; border: none; outline: none; }
+        .db-btn:hover { filter: brightness(1.15); }
+        .db-btn:active { transform: scale(0.97); }
+        .db-inbox-row { transition: background 0.12s; cursor: pointer; }
+        .db-inbox-row:hover { background: rgba(255,255,255,0.03) !important; }
+        @keyframes dbIn { from{opacity:0;transform:translateY(4px)} to{opacity:1;transform:translateY(0)} }
       `}</style>
 
       <div style={{
-        minHeight: '100vh',
-        background: 'var(--bg-1)',
-        padding: '14px 14px 80px',
-        display: 'flex', flexDirection: 'column', gap: 10,
-        maxWidth: 600, margin: '0 auto',
+        display: 'grid',
+        gridTemplateColumns: 'repeat(8, 1fr)',
+        gridTemplateRows: 'repeat(4, 1fr)',
+        gap: 5,
+        padding: 6,
+        width: '100%',
+        height: 'calc(min(580px, 100vh - 130px) - 44px)',
+        boxSizing: 'border-box',
+        overflow: 'hidden',
       }}>
 
-        {/* 1. HERO STRIP */}
-        <div className="ds" style={{
-          background: `linear-gradient(135deg, ${accentColor}18 0%, var(--bg-4) 100%)`,
-          border: `1px solid ${accentColor}30`,
-          borderRadius: 10, padding: '14px',
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
-            <MiniClubBadge name={myClub?.name} size={46} />
-            <div style={{ minWidth: 0 }}>
-              <div style={{
-                fontFamily: 'var(--font-display)', fontWeight: 900,
-                fontSize: 'clamp(15px,4vw,19px)', color: 'var(--text)',
-                letterSpacing: 0.5, lineHeight: 1.1,
-                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-              }}>{myClub?.name}</div>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)', letterSpacing: 1.5, textTransform: 'uppercase', marginTop: 3 }}>{myClub?.league}</div>
-            </div>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 5, flexShrink: 0 }}>
-            <span style={{ background: `${accentColor}22`, border: `1px solid ${accentColor}44`, borderRadius: 4, padding: '3px 10px', fontFamily: 'var(--font-mono)', fontSize: 10, color: accentColor, letterSpacing: 1.5, textTransform: 'uppercase' }}>S{season}</span>
-            <span style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border)', borderRadius: 4, padding: '3px 10px', fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)', letterSpacing: 1.5, textTransform: 'uppercase' }}>W{week}</span>
-          </div>
-        </div>
-
-        {/* 2 + 3. NEXT FIXTURE + LAST RESULT */}
-        <div className="ds" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-
-          <Card>
-            <CardHeader label="Next Fixture" accent="var(--green)" />
-            <div style={{ padding: '14px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, minHeight: 88 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <MiniClubBadge name={myClub?.name} size={22} />
-                <span style={{ fontFamily: 'var(--font-display)', fontSize: 10, color: 'var(--text-muted)', letterSpacing: 1 }}>VS</span>
-                <div style={{ width: 22, height: 22, borderRadius: 4, background: 'var(--bg-5)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ color: 'var(--text-muted)' }}><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20"/><path d="M2 12h20"/></svg>
-                </div>
-              </div>
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ fontFamily: 'var(--font-display)', fontSize: 12, color: 'var(--text-dim)' }}>TBD</div>
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: 'var(--text-muted)', letterSpacing: 1.5, textTransform: 'uppercase', marginTop: 2 }}>Fixtures pending</div>
-              </div>
-            </div>
-          </Card>
-
-          <Card>
-            <CardHeader label="Last Result" accent={
-              form.length ? (form[form.length-1] === 'W' ? 'var(--green)' : form[form.length-1] === 'D' ? 'var(--yellow)' : 'var(--red)') : 'var(--border)'
-            } />
-            <div style={{ padding: '14px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, minHeight: 88 }}>
-              {lastResult ? (
-                <>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <span style={{ fontFamily: 'var(--font-display)', fontSize: 30, fontWeight: 900, color: 'var(--text)', lineHeight: 1 }}>{lastResult.homeGoals}</span>
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--text-muted)' }}>–</span>
-                    <span style={{ fontFamily: 'var(--font-display)', fontSize: 30, fontWeight: 900, color: 'var(--text)', lineHeight: 1 }}>{lastResult.awayGoals}</span>
+        {/* ── NEWS ── */}
+        <div style={{ ...newsCard(), ...areas.news, animation: 'dbIn 0.25s ease both' }}>
+          <Label text="News" />
+          <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
+            {newsItems.map((item, i) => (
+              <div key={i} className="db-news-item" style={{
+                flex: 1,
+                position: 'relative',
+                borderBottom: i < newsItems.length - 1 ? '1px solid rgba(255,255,255,0.05)' : 'none',
+                minHeight: 0,
+                overflow: 'hidden',
+              }}>
+                <div style={{
+                  position: 'absolute', inset: 0,
+                  backgroundImage: `url(${newsImages[i % newsImages.length]})`,
+                  backgroundSize: 'cover', backgroundPosition: 'center',
+                  opacity: 0.18,
+                }} />
+                <div style={{
+                  position: 'absolute', inset: 0,
+                  background: 'linear-gradient(90deg, rgba(10,14,22,0.9) 45%, rgba(10,14,22,0.25) 100%)',
+                }} />
+                <div style={{
+                  position: 'relative', zIndex: 1,
+                  display: 'flex', alignItems: 'center',
+                  padding: '7px 10px', height: '100%', gap: 8, boxSizing: 'border-box',
+                }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontFamily: "'Barlow', sans-serif", fontSize: 10, color: '#c8d0dc', lineHeight: 1.5 }}>{item.text}</div>
+                    <div style={{ fontFamily: "'Share Tech Mono', monospace", fontSize: 7, color: '#556070', letterSpacing: 1.5, marginTop: 3 }}>{item.date}</div>
                   </div>
-                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: 'var(--text-muted)', letterSpacing: 1.5, textTransform: 'uppercase' }}>{lastResult.opponent || 'vs Opponent'}</div>
-                </>
-              ) : (
-                <>
-                  <span style={{ fontFamily: 'var(--font-display)', fontSize: 28, color: 'var(--bg-5)', lineHeight: 1 }}>—</span>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: 'var(--text-muted)', letterSpacing: 1.5, textTransform: 'uppercase' }}>No result yet</span>
-                </>
-              )}
-            </div>
-          </Card>
-        </div>
-
-        {/* 4. FORM */}
-        <Card className="ds">
-          <CardHeader label="Form" accent="var(--text-muted)" />
-          <div style={{ padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 7 }}>
-            {form.length > 0 ? (
-              <>
-                {form.map((r, i) => <FormDot key={i} result={r} />)}
-                {form.length < 5 && Array.from({ length: 5 - form.length }).map((_, i) => (
-                  <div key={i} style={{ width: 28, height: 28, borderRadius: 4, background: 'var(--bg-5)', border: '1px solid var(--border)' }} />
-                ))}
-                <div style={{ marginLeft: 'auto', display: 'flex', gap: 14 }}>
-                  {[['W', wdl.w, 'var(--green)'], ['D', wdl.d, 'var(--yellow)'], ['L', wdl.l, 'var(--red)']].map(([l, v, c]) => (
-                    <div key={l} style={{ textAlign: 'center' }}>
-                      <div style={{ fontFamily: 'var(--font-display)', fontSize: 17, fontWeight: 800, color: c, lineHeight: 1 }}>{v}</div>
-                      <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: 'var(--text-muted)', letterSpacing: 1.5 }}>{l}</div>
-                    </div>
-                  ))}
                 </div>
-              </>
-            ) : (
-              <>
-                {Array.from({ length: 5 }).map((_, i) => (
-                  <div key={i} style={{ width: 28, height: 28, borderRadius: 4, background: 'var(--bg-5)', border: '1px solid var(--border)' }} />
-                ))}
-                <span style={{ marginLeft: 'auto', fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-muted)', letterSpacing: 1.5, textTransform: 'uppercase' }}>No matches yet</span>
-              </>
-            )}
-          </div>
-        </Card>
-
-        {/* 5. TOP PERFORMER */}
-        <Card className="ds">
-          <CardHeader label="Top Performer" accent="var(--yellow)" />
-          {topPerformer ? (
-            <div style={{ padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 14 }}>
-              <img
-                src={`https://ui-avatars.com/api/?name=${encodeURIComponent(topPerformer.name)}&background=1e242d&color=e8edf2&size=80&bold=true`}
-                alt={topPerformer.name}
-                style={{ width: 46, height: 46, borderRadius: 8, objectFit: 'cover', flexShrink: 0 }}
-              />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 800, color: 'var(--text)', letterSpacing: 0.5, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{topPerformer.name}</div>
-                <div style={{ display: 'flex', gap: 6, marginTop: 5 }}>
-                  <span style={{ background: 'var(--bg-5)', border: '1px solid var(--border)', borderRadius: 3, padding: '2px 7px', fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-muted)', letterSpacing: 1.5, textTransform: 'uppercase' }}>{topPerformer.position}</span>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-muted)', letterSpacing: 1, alignSelf: 'center' }}>{topPerformer.nationality}</span>
-                </div>
-              </div>
-              <div style={{ textAlign: 'center', flexShrink: 0 }}>
-                <div style={{ fontFamily: 'var(--font-display)', fontSize: 34, fontWeight: 900, color: 'var(--yellow)', lineHeight: 1 }}>{topPerformer.overall}</div>
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: 'var(--text-muted)', letterSpacing: 1.5, textTransform: 'uppercase', marginTop: 2 }}>OVR</div>
-              </div>
-            </div>
-          ) : (
-            <div style={{ padding: '20px 14px', textAlign: 'center', fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--text-muted)', letterSpacing: 2, textTransform: 'uppercase' }}>No squad data</div>
-          )}
-        </Card>
-
-        {/* 6. SEASON STATS */}
-        <Card className="ds">
-          <CardHeader label="Season Stats" accent="var(--blue)" />
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', padding: '14px 10px' }}>
-            {[
-              ['Played', results.length, 'var(--text)'],
-              ['Won',    wdl.w,          'var(--green)'],
-              ['Drawn',  wdl.d,          'var(--yellow)'],
-              ['Lost',   wdl.l,          'var(--red)'],
-              ['Budget', fmt(budget),    'var(--green)'],
-            ].map(([label, value, color], i, arr) => (
-              <div key={label} style={{ textAlign: 'center', borderRight: i < arr.length - 1 ? '1px solid var(--border)' : 'none', padding: '0 4px' }}>
-                <div style={{ fontFamily: 'var(--font-display)', fontSize: label === 'Budget' ? 13 : 22, fontWeight: 800, color, lineHeight: 1 }}>{value}</div>
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: 'var(--text-muted)', letterSpacing: 1.5, textTransform: 'uppercase', marginTop: 4 }}>{label}</div>
               </div>
             ))}
           </div>
-        </Card>
+        </div>
 
-        {/* 7. LEAGUE SNAPSHOT */}
-        <Card className="ds">
-          <CardHeader label="League Table" accent="var(--green)" />
-          <div>
-            <div style={{ display: 'grid', gridTemplateColumns: '24px 1fr 26px 26px 26px 34px', gap: 4, padding: '6px 14px', borderBottom: '1px solid var(--border)' }}>
-              {['#', 'Club', 'P', 'W', 'GD', 'Pts'].map(h => (
-                <span key={h} style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: 'var(--text-muted)', letterSpacing: 1.5, textTransform: 'uppercase', textAlign: h === 'Club' ? 'left' : 'center' }}>{h}</span>
-              ))}
-            </div>
-            {[1, 2, 3, 4, 5].map(pos => {
-              const isUser = pos === 1;
+        {/* ── OBJECTIVES ── */}
+        <div style={{ ...cardBase(), ...areas.objectives, animation: 'dbIn 0.25s 0.04s ease both' }}>
+          <Label text="Season Objectives" />
+          <div style={{ flex: 1, display: 'flex', gap: 5, padding: '6px 8px', alignItems: 'stretch' }}>
+            {OBJECTIVES.map((obj, i) => {
+              const pct = Math.round((obj.current / obj.target) * 100);
               return (
-                <div key={pos} style={{
-                  display: 'grid', gridTemplateColumns: '24px 1fr 26px 26px 26px 34px',
-                  gap: 4, padding: '8px 14px',
-                  background: isUser ? `${accentColor}10` : 'transparent',
-                  borderLeft: isUser ? `2px solid ${accentColor}` : '2px solid transparent',
-                  borderBottom: pos < 5 ? '1px solid var(--border)' : 'none',
+                <div key={i} style={{
+                  flex: 1,
+                  background: 'rgba(255,255,255,0.03)',
+                  border: '1px solid rgba(255,255,255,0.06)',
+                  padding: '6px 8px',
+                  display: 'flex', flexDirection: 'column', gap: 4,
                 }}>
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: isUser ? accentColor : 'var(--text-muted)', textAlign: 'center', alignSelf: 'center', fontWeight: isUser ? 700 : 400 }}>{pos}</span>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 7, overflow: 'hidden' }}>
-                    {isUser ? (
-                      <>
-                        <MiniClubBadge name={myClub?.name} size={17} />
-                        <span style={{ fontFamily: 'var(--font-body)', fontSize: 12, color: 'var(--text)', fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{myClub?.name}</span>
-                      </>
-                    ) : (
-                      <>
-                        <div style={{ width: 17, height: 17, borderRadius: 3, background: 'var(--bg-5)', border: '1px solid var(--border)', flexShrink: 0 }} />
-                        <div style={{ width: '70%', height: 9, borderRadius: 3, background: 'var(--bg-5)' }} />
-                      </>
-                    )}
+                  <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 9, fontWeight: 700, fontStyle: 'italic', color: '#9aa3b2', textTransform: 'uppercase', letterSpacing: 1 }}>{obj.title}</div>
+                  <div style={{ height: 2, background: 'rgba(255,255,255,0.07)', overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: `${pct}%`, background: accent }} />
                   </div>
-                  {[
-                    isUser ? results.length     : null,
-                    isUser ? wdl.w              : null,
-                    isUser ? '0'                : null,
-                    isUser ? wdl.w * 3 + wdl.d : null,
-                  ].map((val, i) => (
-                    <span key={i} style={{ fontFamily: 'var(--font-display)', fontSize: 12, fontWeight: isUser ? 700 : 400, color: isUser ? 'var(--text)' : 'var(--bg-5)', textAlign: 'center', alignSelf: 'center' }}>
-                      {val !== null ? val : '—'}
-                    </span>
-                  ))}
+                  <div style={{ fontFamily: "'Share Tech Mono', monospace", fontSize: 7, color: '#556070', letterSpacing: 1 }}>{obj.current} / {obj.target}</div>
                 </div>
               );
             })}
-            <div style={{ padding: '8px 14px 10px', textAlign: 'center' }}>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-muted)', letterSpacing: 2, textTransform: 'uppercase' }}>Full table available in Competitions</span>
-            </div>
           </div>
-        </Card>
+        </div>
 
-        {/* 8. MORALE */}
-        <Card className="ds">
-          <CardHeader label="Squad Morale" accent="var(--green)" />
-          <div style={{ padding: '12px 14px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <span style={{ fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--text-dim)' }}>Good</span>
-              <span style={{ fontFamily: 'var(--font-display)', fontSize: 19, fontWeight: 800, color: 'var(--green)' }}>72</span>
-            </div>
-            <div style={{ height: 5, background: 'var(--bg-5)', borderRadius: 3, overflow: 'hidden' }}>
-              <div style={{ height: '100%', width: '72%', background: 'linear-gradient(to right, var(--green), #00b85f)', borderRadius: 3 }} />
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 5 }}>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: 'var(--text-muted)', letterSpacing: 1.5 }}>LOW</span>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: 'var(--text-muted)', letterSpacing: 1.5 }}>HIGH</span>
-            </div>
+        {/* ── PLAY / TRAIN ── */}
+        <button
+          className="db-btn"
+          onClick={() => navigate('/matchday')}
+          style={{
+            ...cardBase(),
+            ...areas.playtrain,
+            animation: 'dbIn 0.25s 0.08s ease both',
+            flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+            gap: 6, cursor: 'pointer',
+            background: isMatchday
+              ? `linear-gradient(160deg, ${accent}33 0%, ${accent}10 100%)`
+              : 'rgba(10,14,22,0.92)',
+            borderTop: `2px solid ${accent}`,
+            width: '100%',
+          }}
+        >
+          <div style={{
+            width: 32, height: 32,
+            background: `${accent}22`,
+            border: `1px solid ${accent}55`,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            {isMatchday
+              ? <svg width="12" height="12" viewBox="0 0 24 24" fill={accent}><path d="M5 3l14 9-14 9V3z"/></svg>
+              : <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={accent} strokeWidth="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+            }
           </div>
-        </Card>
+          <div style={{
+            fontFamily: "'Barlow Condensed', sans-serif",
+            fontSize: 12, fontWeight: 900, fontStyle: 'italic',
+            letterSpacing: 3, textTransform: 'uppercase',
+            color: accent,
+          }}>
+            {isMatchday ? 'Play Match' : 'Train'}
+          </div>
+          <div style={{ fontFamily: "'Share Tech Mono', monospace", fontSize: 7, color: '#556070', letterSpacing: 1.5, textTransform: 'uppercase' }}>
+            {isMatchday ? 'Kick off' : 'No fixture today'}
+          </div>
+        </button>
 
-        {/* 9. NEWS FEED */}
-        <Card className="ds">
-          <CardHeader label="Club News" accent="var(--yellow)" />
-          <div style={{ padding: '4px 0' }}>
-            {newsItems.map((item, i) => {
-              const tagColors = {
-                TRANSFER: { bg: 'rgba(59,130,246,0.12)', border: 'rgba(59,130,246,0.25)', color: 'var(--blue)' },
-                INJURY:   { bg: 'rgba(255,59,92,0.12)',  border: 'rgba(255,59,92,0.25)',  color: 'var(--red)' },
-                BOARD:    { bg: 'rgba(245,197,24,0.12)', border: 'rgba(245,197,24,0.25)', color: 'var(--yellow)' },
-                FORM:     { bg: 'rgba(0,232,122,0.10)',  border: 'rgba(0,232,122,0.2)',   color: 'var(--green)' },
-                SCOUT:    { bg: 'rgba(255,255,255,0.05)', border: 'rgba(255,255,255,0.1)', color: 'var(--text-muted)' },
-              };
-              const tc = tagColors[item.tag] || tagColors.SCOUT;
+        {/* ── CALENDAR ── */}
+        <div style={{ ...cardBase(), ...areas.calendar, animation: 'dbIn 0.25s 0.12s ease both', padding: '6px 8px', gap: 4 }}>
+          {/* Month header */}
+          <div style={{ fontFamily: "'Share Tech Mono', monospace", fontSize: 7, color: '#556070', letterSpacing: 2, textTransform: 'uppercase', flexShrink: 0 }}>
+            {MONTHS[today.getMonth()]} {today.getFullYear()}
+          </div>
+          {/* Day strip — click a day to advance */}
+          <div style={{ display: 'flex', gap: 3, flex: 1, alignItems: 'center' }}>
+            {weekDays.map((d, i) => (
+              <div
+                key={i}
+                className="db-btn"
+                style={{
+                  flex: 1,
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                  gap: 2,
+                  padding: '4px 2px',
+                  background: d.isToday ? `${accent}22` : 'transparent',
+                  border: d.isToday ? `1px solid ${accent}55` : '1px solid transparent',
+                  borderRadius: 2,
+                  cursor: 'pointer',
+                }}
+              >
+                <div style={{ fontFamily: "'Share Tech Mono', monospace", fontSize: 6, color: d.isToday ? accent : '#556070', letterSpacing: 1 }}>{d.label}</div>
+                <div style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 11, fontWeight: d.isToday ? 900 : 400, color: d.isToday ? accent : '#9aa3b2', lineHeight: 1 }}>{d.date}</div>
+                <div style={{ width: 4, height: 4, borderRadius: '50%', background: d.isMatch ? '#f5c518' : 'transparent' }} />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* ── STANDINGS ── */}
+        <div style={{ ...cardBase(), ...areas.standings, animation: 'dbIn 0.25s 0.16s ease both' }}>
+          <Label text="Premier League" />
+          <div style={{ flex: 1, padding: '4px 8px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 2 }}>
+            {DUMMY_TABLE.map((row, i) => {
+              const isMe = myClub?.name?.toLowerCase().includes(row.name.toLowerCase()) || row.name.toLowerCase().includes(myClub?.name?.split(' ').pop()?.toLowerCase() || '');
               return (
-                <div key={i} className="news-row" style={{
-                  display: 'flex', alignItems: 'flex-start', gap: 12,
-                  padding: '11px 14px',
-                  borderBottom: i < newsItems.length - 1 ? '1px solid var(--border)' : 'none',
-                  transition: 'background 0.15s', cursor: 'default',
+                <div key={i} style={{
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  padding: '3px 4px',
+                  background: isMe ? 'rgba(255,255,255,0.04)' : 'transparent',
+                  borderLeft: isMe ? `2px solid ${accent}` : '2px solid transparent',
                 }}>
-                  <span style={{
-                    flexShrink: 0, padding: '2px 6px', borderRadius: 3, marginTop: 2,
-                    fontFamily: 'var(--font-mono)', fontSize: 7, letterSpacing: 1.5,
-                    textTransform: 'uppercase',
-                    background: tc.bg, border: `1px solid ${tc.border}`, color: tc.color,
-                  }}>{item.tag}</span>
-                  <span style={{ fontFamily: 'var(--font-body)', fontSize: 12, color: 'var(--text-dim)', lineHeight: 1.65 }}>{item.text}</span>
+                  <span style={{ fontFamily: "'Share Tech Mono', monospace", fontSize: 7, color: '#556070', width: 10 }}>{i + 1}</span>
+                  <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 10, fontWeight: isMe ? 700 : 400, color: isMe ? '#f0f2f5' : '#9aa3b2', flex: 1, letterSpacing: 0.5 }}>{row.name}</span>
+                  <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 10, fontWeight: 700, color: isMe ? accent : '#556070' }}>{row.pts}</span>
                 </div>
               );
             })}
           </div>
-        </Card>
+        </div>
+
+        {/* ── INBOX ── */}
+        <div style={{ ...cardBase(), ...areas.inbox, animation: 'dbIn 0.25s 0.20s ease both' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '5px 10px', borderBottom: '1px solid rgba(255,255,255,0.06)', flexShrink: 0 }}>
+            <span style={{ fontFamily: "'Barlow Condensed', sans-serif", fontSize: 9, fontWeight: 700, fontStyle: 'italic', letterSpacing: 3, textTransform: 'uppercase', color: '#556070' }}>Inbox</span>
+            <span style={{ background: accent, color: '#0a0e16', fontFamily: "'Share Tech Mono', monospace", fontSize: 7, fontWeight: 700, padding: '1px 5px', borderRadius: 10 }}>3</span>
+          </div>
+          <div style={{ flex: 1, overflowY: 'auto' }}>
+            {[
+              { text: 'Board approved your transfer budget for the window.', unread: true },
+              { text: "Agent: Key player's representatives want contract talks.", unread: true },
+              { text: 'Pre-season schedule confirmed. First match Aug 3rd.', unread: true },
+              { text: 'New training facilities now available for use.', unread: false },
+            ].map((msg, i) => (
+              <div key={i} className="db-inbox-row" style={{
+                display: 'flex', alignItems: 'flex-start', gap: 7,
+                padding: '7px 10px',
+                borderBottom: '1px solid rgba(255,255,255,0.04)',
+              }}>
+                <div style={{
+                  width: 5, height: 5, borderRadius: '50%', flexShrink: 0, marginTop: 4,
+                  background: msg.unread ? accent : 'rgba(255,255,255,0.1)',
+                }} />
+                <span style={{ fontFamily: "'Barlow', sans-serif", fontSize: 9, color: msg.unread ? '#c8d0dc' : '#556070', lineHeight: 1.5 }}>{msg.text}</span>
+              </div>
+            ))}
+          </div>
+        </div>
 
       </div>
     </>

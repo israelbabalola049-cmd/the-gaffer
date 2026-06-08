@@ -6,11 +6,11 @@ import useGameStore from '../store/gameStore';
    CONSTANTS
 ───────────────────────────────────────── */
 const NAV = [
-  { to: '/home',         label: 'Home'     },
-  { to: '/club',         label: 'Club'     },
-  { to: '/matchday',     label: 'Matchday' },
-  { to: '/competitions', label: 'Compete'  },
-  { to: '/manager',      label: 'Manager'  },
+  { to: '/home',         label: 'Home'      },
+  { to: '/club',         label: 'Club'      },
+  { to: '/transfers',    label: 'Transfers' },
+  { to: '/competitions', label: 'Compete'   },
+  { to: '/manager',      label: 'Manager'   },
 ];
 
 export const CLUB_COLOR = {
@@ -63,14 +63,19 @@ export const fmt = (n) => {
 };
 
 export function ClubBadge({ club, size = 40 }) {
-  const color = CLUB_COLOR[club?.name] || '#888';
+  // Prefer badgeUrl from the club data object (same source as Home.jsx startup)
+  // Fall back to the hardcoded map, then to an SVG text fallback
+  const color = club?.color || CLUB_COLOR[club?.name] || '#888';
   const abbr  = CLUB_ABBR[club?.name] || club?.name?.slice(0, 3).toUpperCase() || '—';
-  const url   = CLUB_BADGE_URL[club?.name];
+  const url   = club?.badgeUrl || CLUB_BADGE_URL[club?.name];
   const [failed, setFailed] = useState(false);
 
   if (url && !failed) {
     return <img src={url} alt={club?.name} onError={() => setFailed(true)}
-      style={{ width: size, height: size, objectFit: 'contain', flexShrink: 0 }} />;
+      style={{
+        width: size, height: size, objectFit: 'contain', flexShrink: 0,
+        imageRendering: '-webkit-optimize-contrast',
+      }} />;
   }
   return (
     <div style={{
@@ -91,9 +96,14 @@ const BG_IMAGES = [
 ];
 
 export default function Layout({ children }) {
-  const { myClub, budget, season, week, resetGame } = useGameStore();
+  const { myClub, budget, season, week, resetGame, managerRating, managerProfile } = useGameStore();
   const navigate = useNavigate();
-  const accentColor = CLUB_COLOR[myClub?.name] || '#00e87a';
+  const accentColor = myClub?.color || CLUB_COLOR[myClub?.name] || '#00e87a';
+
+  // Performance bar — green ≥65, yellow 40-64, red <40
+  const rating = managerRating ?? 50;
+  const perfColor = rating >= 65 ? '#00e87a' : rating >= 40 ? '#f5c518' : '#ff3b5c';
+  const managerName = managerProfile?.name || myClub?.name || '';
 
   const handleReset = () => {
     if (confirm('Start a new game? Your current save will be lost.')) {
@@ -163,14 +173,20 @@ export default function Layout({ children }) {
           position: fixed;
           top: 0; left: 0; right: 0;
           z-index: 500;
-          height: 52px;
+          height: 56px;
           display: flex;
           align-items: center;
-          padding: 0 28px;
+          justify-content: center;
           background: transparent;
           pointer-events: none;
         }
-        .g-topbar > * { pointer-events: all; }
+        /* inner must match box width exactly */
+        .g-topbar-inner {
+          width: min(1200px, calc(100% - 120px));
+          display: flex;
+          align-items: center;
+          pointer-events: all;
+        }
 
         .g-topbar-left {
           display: flex;
@@ -239,16 +255,14 @@ export default function Layout({ children }) {
           display: flex;
           align-items: center;
           justify-content: center;
-          /* push down from top so topbar floats above */
-          padding: 52px 32px 28px;
+          padding-top: 64px;
+          padding-bottom: 40px;
         }
 
-        /* ── The box ── */
+        /* ── The box — wide landscape rectangle ── */
         .g-box {
-          width: 100%;
-          max-width: 1100px;
-          /* fill the vertical space between topbar and bottom padding */
-          height: 100%;
+          width: min(1200px, calc(100% - 120px));
+          height: min(580px, calc(100vh - 130px));
           display: flex;
           flex-direction: column;
           border-radius: 0;
@@ -308,24 +322,23 @@ export default function Layout({ children }) {
           background: rgba(255,255,255,0.02);
         }
         .g-tab.active {
-          color: var(--green);
-          border-bottom-color: var(--green);
-          background: rgba(0,232,122,0.05);
+          color: rgba(255,255,255,0.9);
+          border-bottom-color: rgba(255,255,255,0.6);
+          background: rgba(255,255,255,0.03);
         }
         .g-tab.active::after {
           content: '';
           position: absolute;
-          bottom: -1px; left: 24px; right: 24px;
-          height: 2px;
-          background: var(--green);
-          box-shadow: 0 0 10px rgba(0,232,122,0.7);
+          bottom: 0; left: 24px; right: 24px;
+          height: 1px;
+          background: rgba(255,255,255,0.6);
         }
 
         /* ── Content ── */
         .g-content {
           flex: 1;
-          overflow-y: auto;
-          overflow-x: hidden;
+          min-height: 0;
+          overflow: hidden;
           background: var(--bg-2);
         }
         .g-content::-webkit-scrollbar { width: 3px; }
@@ -390,43 +403,55 @@ export default function Layout({ children }) {
 
       {/* Floating top bar */}
       <header className="g-topbar">
-        <div className="g-topbar-left">
-          {myClub && (
-            <>
-              <ClubBadge club={myClub} size={26} />
-              <span className="g-topbar-clubname">{myClub.name}</span>
-            </>
-          )}
-        </div>
-        <div className="g-topbar-right">
-          {myClub && (
-            <>
-              <div className="g-topbar-stat">
-                <span className="g-topbar-stat-val">{fmt(budget)}</span>
-                <span className="g-topbar-stat-label">Budget</span>
-              </div>
-              <div className="g-topbar-sep" />
-              <div className="g-topbar-stat">
-                <span className="g-topbar-stat-val">Season {season}</span>
-                <span className="g-topbar-stat-label">Week {week}</span>
-              </div>
-              <div className="g-topbar-sep" />
-            </>
-          )}
-          <button className="g-topbar-btn" title="New Game" onClick={handleReset}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.51"/>
-            </svg>
-          </button>
+        <div className="g-topbar-inner">
+          <div className="g-topbar-left">
+            {myClub && (
+              <>
+                <ClubBadge club={myClub} size={32} />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                  <span className="g-topbar-clubname">{managerName}</span>
+                  <div style={{
+                    width: 90, height: 3, background: 'rgba(255,255,255,0.1)',
+                    borderRadius: 2, overflow: 'hidden',
+                  }}>
+                    <div style={{
+                      width: `${rating}%`, height: '100%',
+                      background: perfColor,
+                      boxShadow: `0 0 6px ${perfColor}80`,
+                      transition: 'width 0.5s ease',
+                    }} />
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+          <div className="g-topbar-right">
+            {myClub && (
+              <>
+                <div className="g-topbar-stat">
+                  <span className="g-topbar-stat-val">{fmt(budget)}</span>
+                  <span className="g-topbar-stat-label">Budget</span>
+                </div>
+                <div className="g-topbar-sep" />
+                <div className="g-topbar-stat">
+                  <span className="g-topbar-stat-val">Season {season}</span>
+                  <span className="g-topbar-stat-label">Week {week}</span>
+                </div>
+                <div className="g-topbar-sep" />
+              </>
+            )}
+            <button className="g-topbar-btn" title="New Game" onClick={handleReset}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.51"/>
+              </svg>
+            </button>
+          </div>
         </div>
       </header>
 
       {/* Shell + box */}
       <div className="g-shell">
         <div className="g-box" style={{ '--club-accent': accentColor }}>
-
-          {/* Club accent line */}
-          <div className="g-box-accent" />
 
           {/* Tabs */}
           <nav className="g-tabs">
