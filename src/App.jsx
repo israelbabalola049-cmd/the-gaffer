@@ -7,6 +7,7 @@ import Club from './pages/Club';
 import Matchday from './pages/Matchday';
 import Competitions from './pages/Competitions';
 import Manager from './pages/Manager';
+import Transfers from './pages/Transfers';  // add this import
 
 function ProtectedRoute({ children }) {
   const myClub = useGameStore(s => s.myClub);
@@ -19,6 +20,17 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<Home />} />
+
+        {/* Matchday is standalone — no Layout shell */}
+        <Route
+          path="/matchday"
+          element={
+            <ProtectedRoute>
+              <Matchday />
+            </ProtectedRoute>
+          }
+        />
+
         <Route
           path="/*"
           element={
@@ -27,9 +39,9 @@ export default function App() {
                 <Routes>
                   <Route path="/home" element={<Dashboard />} />
                   <Route path="/club" element={<Club />} />
-                  <Route path="/matchday" element={<Matchday />} />
                   <Route path="/competitions" element={<Competitions />} />
                   <Route path="/manager" element={<Manager />} />
+                  <Route path="/transfers" element={<Transfers />} />
                 </Routes>
               </Layout>
             </ProtectedRoute>

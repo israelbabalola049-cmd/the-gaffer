@@ -213,6 +213,19 @@ const useGameStore = create(
         const awayClub = isHome ? fixture.awayClub : state.myClub;
         const { homeGoals, awayGoals } = simulateMatch(homeClub, awayClub, state.allPlayers);
 
+        get().recordMatchResult(fixtureId, { homeGoals, awayGoals });
+      },
+
+      /* ─── Records a match result that was already computed elsewhere
+             (e.g. matchEngine.js / LiveSim) — single source of truth for
+             persisted season state (fixtures, leagueTable, week, results)
+             without re-simulating or overwriting the real score. ─── */
+      recordMatchResult: (fixtureId, { homeGoals, awayGoals }) => {
+        const state   = get();
+        const fixture = state.fixtures.find(f => f.id === fixtureId);
+        if (!fixture || fixture.played) return;
+
+        const isHome   = fixture.home === state.myClub.name;
         const myGoals  = isHome ? homeGoals : awayGoals;
         const oppGoals = isHome ? awayGoals : homeGoals;
         const outcome  = myGoals > oppGoals ? 'W' : myGoals < oppGoals ? 'L' : 'D';
@@ -246,13 +259,13 @@ const useGameStore = create(
           }).sort((a, b) => b.points - a.points || b.goalDifference - a.goalDifference);
         }
 
-        const ratingDelta  = outcome === 'W' ? 2 : outcome === 'L' ? -2 : 0;
+        const ratingDelta   = outcome === 'W' ? 2 : outcome === 'L' ? -2 : 0;
         const managerRating = Math.min(100, Math.max(0, state.managerRating + ratingDelta));
 
         set({
           fixtures,
           leagueTable,
-          results: [...state.results, { fixtureId, week: state.week, competition: fixture.competition, home: fixture.home, away: fixture.away, homeGoals, awayGoals, outcome }],
+          results: [...state.results, { fixtureId, week: state.week, competition: fixture.competition, home: fixture.home, away: fixture.away, homeGoals, awayGoals, myGoals, oppGoals, outcome }],
           currentFixtureIndex: state.currentFixtureIndex + 1,
           week: state.week + 1,
           managerRating,
@@ -263,6 +276,9 @@ const useGameStore = create(
         const state = get();
         state.fixtures.filter(f => !f.played).forEach(f => get().playFixture(f.id));
       },
+
+      /* ─── Advances the week with no match played (training/bye week) ─── */
+      trainDay: () => set(state => ({ week: state.week + 1 })),
 
       addNotification: (notification) =>
         set(state => ({ notifications: [{ id: Date.now(), read: false, week: state.week, ...notification }, ...state.notifications] })),

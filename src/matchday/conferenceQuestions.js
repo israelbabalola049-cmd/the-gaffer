@@ -278,7 +278,12 @@ export const POST_MATCH_QUESTIONS = [
 
 /* ─── Question picker ─── */
 export function pickQuestions(pool, condition, count = 3) {
-  const eligible = pool.filter(q => q.condition === condition || q.condition === 'any');
+  /* Questions with no 'condition' field (e.g. PRE_MATCH_QUESTIONS) are
+     always eligible. Questions with a condition only match if it equals
+     the requested condition or is explicitly 'any'. */
+  const eligible = pool.filter(q =>
+    q.condition === undefined || q.condition === condition || q.condition === 'any'
+  );
   const shuffled = eligible.sort(() => Math.random() - 0.5);
   return shuffled.slice(0, count).map(q => {
     /* randomise which 2 answers are "good" each session */

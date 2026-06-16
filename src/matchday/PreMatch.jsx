@@ -402,27 +402,14 @@ function TeamTalk({ fixture, onDone }) {
 /* ════════════════════════════════════
    MAIN PreMatch COMPONENT
 ════════════════════════════════════ */
-export default function PreMatch({ fixture, squad, formation, onFormationChange, onComplete, onCancel }) {
-  const [step, setStep] = useState(0);
-  const [confBonus, setConfBonus] = useState({ morale: 0, managerRating: 0 });
-  const [teamConfig, setTeamConfig] = useState(null);
+export default function PreMatch({ fixture, onComplete, onCancel }) {
 
   const handleConferenceDone = (bonus) => {
-    setConfBonus(bonus);
-    setStep(1);
+    onComplete({ confBonus: bonus });
   };
 
   const handleConferenceSkip = () => {
-    setStep(1);
-  };
-
-  const handleTeamDone = (config) => {
-    setTeamConfig(config);
-    setStep(2);
-  };
-
-  const handleTalkDone = (talkId) => {
-    onComplete({ ...teamConfig, teamTalkId: talkId, confBonus });
+    onComplete({ confBonus: { morale: 0, managerRating: 0 } });
   };
 
   return (
@@ -445,29 +432,11 @@ export default function PreMatch({ fixture, squad, formation, onFormationChange,
         <div style={{ width: 26 }} />
       </div>
 
-      <StepBar step={step} />
-
-      {step === 0 && (
-        <PressConference
-          fixture={fixture}
-          onDone={handleConferenceDone}
-          onSkip={handleConferenceSkip}
-        />
-      )}
-      {step === 1 && (
-        <TeamSelection
-          squad={squad}
-          formation={formation}
-          onFormationChange={onFormationChange}
-          onDone={handleTeamDone}
-        />
-      )}
-      {step === 2 && (
-        <TeamTalk
-          fixture={fixture}
-          onDone={handleTalkDone}
-        />
-      )}
+      <PressConference
+        fixture={fixture}
+        onDone={handleConferenceDone}
+        onSkip={handleConferenceSkip}
+      />
     </div>
   );
 }
