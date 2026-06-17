@@ -509,25 +509,27 @@ export default function PostMatch({
     );
   }
 
-  /* ─── Main match report ─── */
+  /* ─── Main match report — desktop layout: fixed-height shell,
+         pinned hero header + pinned action bar, scrollable two-column body ─── */
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg-1)', paddingBottom: 100 }}>
+    <div style={{ position: 'fixed', inset: 0, background: 'var(--bg-1)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <style>{`
         @keyframes fadeSlideIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
         @keyframes scaleIn    { from{opacity:0;transform:scale(0.96)} to{opacity:1;transform:scale(1)} }
         * { -webkit-tap-highlight-color: transparent; }
       `}</style>
 
-      {/* ── Result hero ── */}
+      {/* ── Result hero (pinned) ── */}
       <div style={{
-        padding: '30px 16px 24px',
+        flexShrink: 0,
+        padding: '22px 32px 18px',
         background: `linear-gradient(180deg, ${resultColor}18 0%, transparent 100%)`,
         borderBottom: `1px solid ${resultColor}20`,
         textAlign: 'center',
         animation: 'fadeSlideIn 0.5s ease',
       }}>
         {/* Competition chip */}
-        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginBottom: 16 }}>
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginBottom: 12 }}>
           <div style={{ width: 8, height: 8, borderRadius: '50%', background: compAccent }} />
           <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: compAccent, letterSpacing: 3, textTransform: 'uppercase' }}>
             {fixture.competition}{fixture.cupRound ? ` · ${fixture.cupRound}` : ''}
@@ -537,34 +539,34 @@ export default function PostMatch({
         {/* Result label */}
         <div style={{
           fontFamily: 'var(--font-display)', fontSize: 11, fontWeight: 800,
-          letterSpacing: 6, textTransform: 'uppercase', color: resultColor, marginBottom: 14,
+          letterSpacing: 6, textTransform: 'uppercase', color: resultColor, marginBottom: 10,
         }}>{resultLabel}</div>
 
         {/* Clubs + score */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 24 }}>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-            <ClubBadge name={fixture.home} size={48} />
-            <span style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: 'var(--text-muted)', maxWidth: 90, textAlign: 'center', lineHeight: 1.3 }}>
+            <ClubBadge name={fixture.home} size={44} />
+            <span style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: 'var(--text-muted)', maxWidth: 110, textAlign: 'center', lineHeight: 1.3 }}>
               {fixture.home}
             </span>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
             <span style={{
-              fontFamily: 'var(--font-display)', fontSize: 64, fontWeight: 900,
+              fontFamily: 'var(--font-display)', fontSize: 52, fontWeight: 900,
               color: 'var(--text)', lineHeight: 1,
               textShadow: `0 0 30px ${resultColor}44`,
             }}>{fixture.isHome ? myGoals : oppGoals}</span>
-            <span style={{ fontFamily: 'var(--font-display)', fontSize: 32, color: 'var(--border)', lineHeight: 1 }}>–</span>
+            <span style={{ fontFamily: 'var(--font-display)', fontSize: 26, color: 'var(--border)', lineHeight: 1 }}>–</span>
             <span style={{
-              fontFamily: 'var(--font-display)', fontSize: 64, fontWeight: 900,
+              fontFamily: 'var(--font-display)', fontSize: 52, fontWeight: 900,
               color: 'var(--text)', lineHeight: 1,
             }}>{fixture.isHome ? oppGoals : myGoals}</span>
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-            <ClubBadge name={fixture.away} size={48} />
-            <span style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: 'var(--text-muted)', maxWidth: 90, textAlign: 'center', lineHeight: 1.3 }}>
+            <ClubBadge name={fixture.away} size={44} />
+            <span style={{ fontFamily: 'var(--font-body)', fontSize: 11, color: 'var(--text-muted)', maxWidth: 110, textAlign: 'center', lineHeight: 1.3 }}>
               {fixture.away}
             </span>
           </div>
@@ -572,7 +574,7 @@ export default function PostMatch({
 
         {/* Scorers */}
         {scorers.length > 0 && (
-          <div style={{ marginTop: 14, display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 8 }}>
+          <div style={{ marginTop: 12, display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 8 }}>
             {scorers.map((s, i) => (
               <div key={i} style={{
                 display: 'inline-flex', alignItems: 'center', gap: 5,
@@ -595,107 +597,120 @@ export default function PostMatch({
         )}
       </div>
 
-      <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {/* ── Body — scrollable two-column desktop layout ── */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '20px 32px' }}>
+        <div style={{ maxWidth: 1100, margin: '0 auto', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, alignItems: 'start' }}>
 
-        {/* ── MOTM ── */}
-        {motm && (
-          <div style={{
-            background: 'linear-gradient(135deg, rgba(245,197,24,0.12) 0%, var(--bg-3) 100%)',
-            border: '1px solid rgba(245,197,24,0.25)', borderRadius: 12,
-            padding: '14px 16px',
-            display: 'flex', alignItems: 'center', gap: 14,
-            animation: 'scaleIn 0.4s ease 0.1s both',
-          }}>
-            <div style={{
-              width: 48, height: 48, borderRadius: 12, flexShrink: 0,
-              background: 'rgba(245,197,24,0.12)', border: '1.5px solid rgba(245,197,24,0.3)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 900, color: '#f5c518',
-            }}>
-              {motm.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
-            </div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 800, color: 'var(--text)' }}>{motm.name}</div>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: '#f5c518', letterSpacing: 2.5, textTransform: 'uppercase', marginTop: 3 }}>Man of the Match</div>
-              {motm.goals > 0 && (
-                <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: 'var(--text-muted)', letterSpacing: 1, marginTop: 3 }}>
-                  {motm.goals} goal{motm.goals > 1 ? 's' : ''}{motm.assists > 0 ? ` · ${motm.assists} assist${motm.assists > 1 ? 's' : ''}` : ''}
-                </div>
-              )}
-            </div>
-            <div style={{ textAlign: 'center', flexShrink: 0 }}>
-              <div style={{ fontFamily: 'var(--font-display)', fontSize: 36, fontWeight: 900, color: '#f5c518', lineHeight: 1 }}>{motm.matchRating.toFixed(1)}</div>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 7, color: 'var(--text-muted)', letterSpacing: 2, textTransform: 'uppercase', marginTop: 3 }}>Rating</div>
-            </div>
-          </div>
-        )}
+          {/* LEFT COLUMN — MOTM + Stats */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
 
-        {/* ── Match Stats ── */}
-        <div style={{
-          background: 'var(--bg-3)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden',
-          animation: 'scaleIn 0.4s ease 0.2s both',
-        }}>
-          <div style={{ padding: '11px 16px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: 'var(--text-muted)', letterSpacing: 3, textTransform: 'uppercase' }}>Match Stats</span>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 7, color: myColor, letterSpacing: 1 }}>{myName.split(' ')[0]}</span>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 7, color: 'var(--text-muted)', letterSpacing: 1 }}>vs</span>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 7, color: 'var(--text-muted)', letterSpacing: 1 }}>{oppName.split(' ')[0]}</span>
-            </div>
-          </div>
-          <div style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <StatRow label="Shots"     myVal={stats.myShots}        oppVal={stats.oppShots}   highlight={myColor} />
-            <StatRow label="On Target" myVal={stats.mySot}          oppVal={stats.oppSot}     highlight={myColor} />
-            <StatRow label="Possession" myVal={`${stats.myPoss}%`}  oppVal={`${stats.oppPoss}%`} highlight={myColor} />
-            <StatRow label="xG"         myVal={(myXg ?? 0).toFixed(2)}  oppVal={(oppXg ?? 0).toFixed(2)} highlight={myColor} />
-            <StatRow label="Corners"   myVal={stats.myCorners}      oppVal={stats.oppCorners} highlight={myColor} />
-            <StatRow label="Fouls"     myVal={stats.myFouls}        oppVal={stats.oppFouls}   highlight={myColor} />
-            <StatRow label="Yellows"   myVal={stats.myYellows}      oppVal={stats.oppYellows} highlight={myColor} />
-            {(stats.myReds > 0 || stats.oppReds > 0) && (
-              <StatRow label="Reds" myVal={stats.myReds} oppVal={stats.oppReds} highlight="#ff3b5c" />
-            )}
-          </div>
-        </div>
-
-        {/* ── Player Ratings ── */}
-        <div style={{
-          background: 'var(--bg-3)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden',
-          animation: 'scaleIn 0.4s ease 0.3s both',
-        }}>
-          <div style={{ padding: '11px 16px', borderBottom: '1px solid var(--border)' }}>
-            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: 'var(--text-muted)', letterSpacing: 3, textTransform: 'uppercase' }}>Player Ratings</span>
-          </div>
-          {playerRatings.map((p, i) => {
-            const isMOTM = i === 0;
-            return (
-              <div key={p.id || i} style={{
-                display: 'flex', alignItems: 'center', gap: 10,
-                padding: '9px 14px',
-                background: isMOTM ? 'rgba(245,197,24,0.04)' : 'transparent',
-                borderBottom: i < playerRatings.length - 1 ? '1px solid var(--border)' : 'none',
+            {/* ── MOTM ── */}
+            {motm && (
+              <div style={{
+                background: 'linear-gradient(135deg, rgba(245,197,24,0.12) 0%, var(--bg-3) 100%)',
+                border: '1px solid rgba(245,197,24,0.25)', borderRadius: 12,
+                padding: '14px 16px',
+                display: 'flex', alignItems: 'center', gap: 14,
+                animation: 'scaleIn 0.4s ease 0.1s both',
               }}>
-                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 7, color: 'var(--text-muted)', width: 28, letterSpacing: 1, textTransform: 'uppercase' }}>{p.position}</span>
-                <span style={{ fontFamily: 'var(--font-body)', fontSize: 12, color: 'var(--text)', flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</span>
-                {p.goals > 0 && (
-                  <div style={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#00e87a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/></svg>
-                    {p.goals > 1 && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: '#00e87a' }}>×{p.goals}</span>}
-                  </div>
-                )}
-                {p.assists > 0 && (
-                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: 'var(--text-muted)', letterSpacing: 1 }}>A{p.assists}</span>
-                )}
-                {isMOTM && (
-                  <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#f5c518', flexShrink: 0 }} />
-                )}
-                <RatingBadge rating={p.matchRating} />
+                <div style={{
+                  width: 48, height: 48, borderRadius: 12, flexShrink: 0,
+                  background: 'rgba(245,197,24,0.12)', border: '1.5px solid rgba(245,197,24,0.3)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 900, color: '#f5c518',
+                }}>
+                  {motm.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontFamily: 'var(--font-display)', fontSize: 15, fontWeight: 800, color: 'var(--text)' }}>{motm.name}</div>
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: '#f5c518', letterSpacing: 2.5, textTransform: 'uppercase', marginTop: 3 }}>Man of the Match</div>
+                  {motm.goals > 0 && (
+                    <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: 'var(--text-muted)', letterSpacing: 1, marginTop: 3 }}>
+                      {motm.goals} goal{motm.goals > 1 ? 's' : ''}{motm.assists > 0 ? ` · ${motm.assists} assist${motm.assists > 1 ? 's' : ''}` : ''}
+                    </div>
+                  )}
+                </div>
+                <div style={{ textAlign: 'center', flexShrink: 0 }}>
+                  <div style={{ fontFamily: 'var(--font-display)', fontSize: 36, fontWeight: 900, color: '#f5c518', lineHeight: 1 }}>{motm.matchRating.toFixed(1)}</div>
+                  <div style={{ fontFamily: 'var(--font-mono)', fontSize: 7, color: 'var(--text-muted)', letterSpacing: 2, textTransform: 'uppercase', marginTop: 3 }}>Rating</div>
+                </div>
               </div>
-            );
-          })}
-        </div>
+            )}
 
-        {/* ── Actions ── */}
-        <div style={{ display: 'flex', gap: 10, animation: 'scaleIn 0.4s ease 0.35s both' }}>
+            {/* ── Match Stats ── */}
+            <div style={{
+              background: 'var(--bg-3)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden',
+              animation: 'scaleIn 0.4s ease 0.2s both',
+            }}>
+              <div style={{ padding: '11px 16px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: 'var(--text-muted)', letterSpacing: 3, textTransform: 'uppercase' }}>Match Stats</span>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 7, color: myColor, letterSpacing: 1 }}>{myName.split(' ')[0]}</span>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 7, color: 'var(--text-muted)', letterSpacing: 1 }}>vs</span>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 7, color: 'var(--text-muted)', letterSpacing: 1 }}>{oppName.split(' ')[0]}</span>
+                </div>
+              </div>
+              <div style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <StatRow label="Shots"     myVal={stats.myShots}        oppVal={stats.oppShots}   highlight={myColor} />
+                <StatRow label="On Target" myVal={stats.mySot}          oppVal={stats.oppSot}     highlight={myColor} />
+                <StatRow label="Possession" myVal={`${stats.myPoss}%`}  oppVal={`${stats.oppPoss}%`} highlight={myColor} />
+                <StatRow label="xG"         myVal={(myXg ?? 0).toFixed(2)}  oppVal={(oppXg ?? 0).toFixed(2)} highlight={myColor} />
+                <StatRow label="Corners"   myVal={stats.myCorners}      oppVal={stats.oppCorners} highlight={myColor} />
+                <StatRow label="Fouls"     myVal={stats.myFouls}        oppVal={stats.oppFouls}   highlight={myColor} />
+                <StatRow label="Yellows"   myVal={stats.myYellows}      oppVal={stats.oppYellows} highlight={myColor} />
+                {(stats.myReds > 0 || stats.oppReds > 0) && (
+                  <StatRow label="Reds" myVal={stats.myReds} oppVal={stats.oppReds} highlight="#ff3b5c" />
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* RIGHT COLUMN — Player Ratings */}
+          <div style={{
+            background: 'var(--bg-3)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden',
+            animation: 'scaleIn 0.4s ease 0.3s both', alignSelf: 'start',
+          }}>
+            <div style={{ padding: '11px 16px', borderBottom: '1px solid var(--border)' }}>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: 'var(--text-muted)', letterSpacing: 3, textTransform: 'uppercase' }}>Player Ratings</span>
+            </div>
+            {playerRatings.map((p, i) => {
+              const isMOTM = i === 0;
+              return (
+                <div key={p.id || i} style={{
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  padding: '9px 14px',
+                  background: isMOTM ? 'rgba(245,197,24,0.04)' : 'transparent',
+                  borderBottom: i < playerRatings.length - 1 ? '1px solid var(--border)' : 'none',
+                }}>
+                  <span style={{ fontFamily: 'var(--font-mono)', fontSize: 7, color: 'var(--text-muted)', width: 28, letterSpacing: 1, textTransform: 'uppercase' }}>{p.position}</span>
+                  <span style={{ fontFamily: 'var(--font-body)', fontSize: 12, color: 'var(--text)', flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</span>
+                  {p.goals > 0 && (
+                    <div style={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#00e87a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/></svg>
+                      {p.goals > 1 && <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: '#00e87a' }}>×{p.goals}</span>}
+                    </div>
+                  )}
+                  {p.assists > 0 && (
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: 'var(--text-muted)', letterSpacing: 1 }}>A{p.assists}</span>
+                  )}
+                  {isMOTM && (
+                    <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#f5c518', flexShrink: 0 }} />
+                  )}
+                  <RatingBadge rating={p.matchRating} />
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Actions (pinned footer, always reachable) ── */}
+      <div style={{
+        flexShrink: 0, borderTop: '1px solid var(--border)', background: 'var(--bg-1)',
+        padding: '16px 32px', display: 'flex', justifyContent: 'center',
+        animation: 'scaleIn 0.4s ease 0.35s both',
+      }}>
+        <div style={{ display: 'flex', gap: 10, maxWidth: 1100, width: '100%' }}>
           <button
             onClick={() => setView('conference')}
             style={{
@@ -711,7 +726,7 @@ export default function PostMatch({
           <button
             onClick={() => onContinue({})}
             style={{
-              flex: 1, padding: '13px', borderRadius: 8, border: 'none',
+              flex: 2, padding: '13px', borderRadius: 8, border: 'none',
               background: 'var(--green)', color: '#000',
               fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 900,
               letterSpacing: 1.5, textTransform: 'uppercase', cursor: 'pointer',

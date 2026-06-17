@@ -701,6 +701,195 @@ function BenchStrip({ squad, formation, accent }) {
 }
 
 /* ══════════════════════════════════════════
+   SQUAD HUB — full player list
+══════════════════════════════════════════ */
+function SquadHubView({ squad, youthPlayers, accent, onBack }) {
+  const [posFilter, setPosFilter] = useState('ALL');
+  const allPlayers = useMemo(() => {
+    const main = (squad || []).map(p => ({ ...p, _type: 'squad' }));
+    const youth = (youthPlayers || []).map(p => ({ ...p, _type: 'loan' }));
+    return [...main, ...youth].sort((a, b) => b.overall - a.overall);
+  }, [squad, youthPlayers]);
+
+  const filtered = useMemo(() => {
+    if (posFilter === 'ALL') return allPlayers;
+    return allPlayers.filter(p => posGroup(p.position) === posFilter);
+  }, [allPlayers, posFilter]);
+
+  return (
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', borderBottom: '1px solid rgba(255,255,255,0.07)', flexShrink: 0 }}>
+        <button onClick={onBack} style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#9aa3b2', fontFamily: "'Barlow Condensed',sans-serif", fontSize: 11, fontWeight: 700, padding: '4px 10px', cursor: 'pointer', letterSpacing: 1 }}>← BACK</button>
+        <span style={{ fontFamily: "'Barlow Condensed',sans-serif", fontSize: 16, fontWeight: 900, color: '#f0f2f5', letterSpacing: 1, textTransform: 'uppercase' }}>Squad Hub</span>
+        <span style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 8, color: '#556070', letterSpacing: 1.5, marginLeft: 4 }}>{allPlayers.length} PLAYERS</span>
+      </div>
+      {/* Pos filter */}
+      <div style={{ display: 'flex', gap: 4, padding: '8px 14px', borderBottom: '1px solid rgba(255,255,255,0.06)', flexShrink: 0 }}>
+        {['ALL', 'GK', 'DEF', 'MID', 'FWD'].map(f => (
+          <button key={f} onClick={() => setPosFilter(f)} style={{ padding: '3px 10px', background: posFilter === f ? `${accent}22` : 'transparent', border: `1px solid ${posFilter === f ? accent : 'rgba(255,255,255,0.08)'}`, color: posFilter === f ? accent : '#556070', fontFamily: "'Share Tech Mono',monospace", fontSize: 8, letterSpacing: 1.5, cursor: 'pointer' }}>{f}</button>
+        ))}
+      </div>
+      {/* Column headers */}
+      <div style={{ display: 'grid', gridTemplateColumns: '28px 1fr 40px 32px 32px 50px', gap: 6, padding: '4px 14px 6px', borderBottom: '1px solid rgba(255,255,255,0.06)', flexShrink: 0 }}>
+        {['#', 'Player', 'OVR', 'AGE', 'POS', 'STATUS'].map(h => (
+          <span key={h} style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 7, color: '#556070', letterSpacing: 1.5, textAlign: h === 'Player' ? 'left' : 'center' }}>{h}</span>
+        ))}
+      </div>
+      {/* List */}
+      <div style={{ flex: 1, overflowY: 'auto' }}>
+        {filtered.map((p, i) => {
+          const oc = ovrColor(p.overall);
+          const pc = posColor(p.position);
+          const isLoan = p._type === 'loan';
+          return (
+            <div key={p.id} style={{ display: 'grid', gridTemplateColumns: '28px 1fr 40px 32px 32px 50px', gap: 6, padding: '8px 14px', borderBottom: '1px solid rgba(255,255,255,0.04)', alignItems: 'center', background: isLoan ? 'rgba(245,197,24,0.03)' : 'transparent' }}>
+              <div style={{ textAlign: 'center', fontFamily: "'Barlow Condensed',sans-serif", fontSize: 11, fontWeight: 900, color: '#3b4555' }}>{i + 1}</div>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontFamily: "'Barlow Condensed',sans-serif", fontSize: 13, fontWeight: 700, color: '#d0d4da', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</div>
+                <div style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 7, color: '#3b4555', letterSpacing: 0.5 }}>{p.nationality}</div>
+              </div>
+              <div style={{ textAlign: 'center', fontFamily: "'Barlow Condensed',sans-serif", fontSize: 13, fontWeight: 900, color: oc }}>{p.overall}</div>
+              <div style={{ textAlign: 'center', fontFamily: "'Barlow Condensed',sans-serif", fontSize: 12, color: '#9aa3b2' }}>{p.age}</div>
+              <div style={{ textAlign: 'center', fontFamily: "'Share Tech Mono',monospace", fontSize: 7, color: pc, letterSpacing: 0.5 }}>{p.position}</div>
+              <div style={{ textAlign: 'center' }}>
+                <span style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 6, letterSpacing: 1, padding: '2px 5px', border: `1px solid ${isLoan ? '#f5c51855' : `${accent}44`}`, color: isLoan ? '#f5c518' : accent, borderRadius: 2 }}>{isLoan ? 'LOAN' : 'SQUAD'}</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════
+   EDIT PLAYERS VIEW
+══════════════════════════════════════════ */
+function EditPlayersView({ squad, accent, onBack }) {
+  const [editingId, setEditingId] = useState(null);
+  const [edits, setEdits] = useState({});
+  const sorted = useMemo(() => [...(squad || [])].sort((a, b) => b.overall - a.overall), [squad]);
+
+  const ATTR_KEYS = ['pace', 'shooting', 'passing', 'dribbling', 'defending', 'physical'];
+  const ATTR_LABELS = ['PAC', 'SHO', 'PAS', 'DRI', 'DEF', 'PHY'];
+
+  const editingPlayer = editingId ? sorted.find(p => p.id === editingId) : null;
+  const playerEdits = editingId ? (edits[editingId] || {}) : {};
+
+  const getValue = (key) => playerEdits[key] !== undefined ? playerEdits[key] : (editingPlayer?.[key] || '');
+  const setValue = (key, val) => setEdits(e => ({ ...e, [editingId]: { ...(e[editingId] || {}), [key]: val } }));
+
+  return (
+    <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+      {/* Player list */}
+      <div style={{ width: editingPlayer ? 200 : '100%', flexShrink: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRight: editingPlayer ? '1px solid rgba(255,255,255,0.07)' : 'none', transition: 'width 0.2s' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', borderBottom: '1px solid rgba(255,255,255,0.07)', flexShrink: 0 }}>
+          <button onClick={onBack} style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#9aa3b2', fontFamily: "'Barlow Condensed',sans-serif", fontSize: 11, fontWeight: 700, padding: '4px 10px', cursor: 'pointer', letterSpacing: 1 }}>← BACK</button>
+          <span style={{ fontFamily: "'Barlow Condensed',sans-serif", fontSize: 16, fontWeight: 900, color: '#f0f2f5', letterSpacing: 1, textTransform: 'uppercase' }}>Edit Players</span>
+        </div>
+        <div style={{ flex: 1, overflowY: 'auto' }}>
+          {sorted.map(p => {
+            const pc = posColor(p.position);
+            const oc = ovrColor(p.overall);
+            const isSelected = editingId === p.id;
+            return (
+              <div key={p.id} onClick={() => setEditingId(isSelected ? null : p.id)}
+                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 14px', borderBottom: '1px solid rgba(255,255,255,0.04)', cursor: 'pointer', background: isSelected ? `${accent}12` : 'transparent', borderLeft: isSelected ? `2px solid ${accent}` : '2px solid transparent', transition: 'all 0.1s' }}>
+                <div style={{ width: 30, height: 30, borderRadius: '50%', background: `${pc}33`, border: `1.5px solid ${pc}55`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Barlow Condensed',sans-serif", fontSize: 11, fontWeight: 900, color: oc, flexShrink: 0 }}>{p.overall}</div>
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div style={{ fontFamily: "'Barlow Condensed',sans-serif", fontSize: 13, fontWeight: 700, color: isSelected ? '#f0f2f5' : '#d0d4da', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</div>
+                  <div style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 6, color: pc, letterSpacing: 1 }}>{p.position}</div>
+                </div>
+                <div style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 7, color: '#3b4555', letterSpacing: 1 }}>EDIT</div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Edit panel */}
+      {editingPlayer && (
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', animation: 'fadeIn 0.15s ease' }}>
+          <div style={{ padding: '10px 14px', borderBottom: '1px solid rgba(255,255,255,0.07)', flexShrink: 0 }}>
+            <div style={{ fontFamily: "'Barlow Condensed',sans-serif", fontSize: 18, fontWeight: 900, color: '#f0f2f5', letterSpacing: 0.5 }}>{editingPlayer.name}</div>
+            <div style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 7, color: '#556070', letterSpacing: 1.5, textTransform: 'uppercase' }}>{editingPlayer.position} · {editingPlayer.age} yrs</div>
+          </div>
+          <div style={{ flex: 1, overflowY: 'auto', padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {/* Name edit */}
+            <div>
+              <div style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 7, color: '#556070', letterSpacing: 2, textTransform: 'uppercase', marginBottom: 5 }}>Name</div>
+              <input value={getValue('name')} onChange={e => setValue('name', e.target.value)}
+                style={{ width: '100%', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.1)', color: '#f0f2f5', fontFamily: "'Barlow Condensed',sans-serif", fontSize: 13, fontWeight: 700, padding: '6px 10px', outline: 'none', boxSizing: 'border-box' }}
+                placeholder={editingPlayer.name} />
+            </div>
+            {/* Attributes */}
+            <div>
+              <div style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 7, color: '#556070', letterSpacing: 2, textTransform: 'uppercase', marginBottom: 8 }}>Attributes</div>
+              {ATTR_KEYS.map((key, i) => {
+                const val = parseInt(getValue(key)) || editingPlayer[key] || 50;
+                const c = val >= 85 ? '#f5c518' : val >= 75 ? '#00e87a' : val >= 60 ? '#3b82f6' : val >= 45 ? '#9aa3ae' : '#ff3b5c';
+                return (
+                  <div key={key} style={{ display: 'grid', gridTemplateColumns: '28px 1fr 44px', gap: 8, alignItems: 'center', marginBottom: 8 }}>
+                    <span style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 7, color: '#556070', letterSpacing: 1.5 }}>{ATTR_LABELS[i]}</span>
+                    <input type="range" min={1} max={99} value={val}
+                      onChange={e => setValue(key, parseInt(e.target.value))}
+                      style={{ accentColor: accent }} />
+                    <input type="number" min={1} max={99} value={val}
+                      onChange={e => setValue(key, parseInt(e.target.value) || val)}
+                      style={{ width: '100%', background: 'rgba(255,255,255,0.04)', border: `1px solid ${c}44`, color: c, fontFamily: "'Barlow Condensed',sans-serif", fontSize: 13, fontWeight: 900, padding: '3px 6px', outline: 'none', textAlign: 'center', boxSizing: 'border-box' }} />
+                  </div>
+                );
+              })}
+            </div>
+            {/* Save button */}
+            <button style={{ padding: '8px 0', background: `${accent}22`, border: `1px solid ${accent}`, color: accent, fontFamily: "'Barlow Condensed',sans-serif", fontSize: 13, fontWeight: 900, letterSpacing: 2, textTransform: 'uppercase', cursor: 'pointer', marginTop: 4 }}>
+              Save Changes
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════
+   TEAM SHEETS PICKER
+══════════════════════════════════════════ */
+function TeamSheetsView({ accent, onSelectSheet }) {
+  const SHEETS = [
+    { id: 'lineup',    label: 'Starting XI',     desc: 'Set your matchday lineup and formation', icon: '◈' },
+    { id: 'formation', label: 'Formation',        desc: 'Choose your tactical shape',             icon: '⬡' },
+    { id: 'strategy',  label: 'Strategy',         desc: 'Mentality, pressing & defensive line',   icon: '◎' },
+    { id: 'roles',     label: 'Player Roles',     desc: 'Assign roles to each position',          icon: '◇' },
+    { id: 'gameplan',  label: 'Set Pieces',       desc: 'Corners, free kicks & throw-ins',        icon: '◉' },
+  ];
+  return (
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div style={{ padding: '10px 14px', borderBottom: '1px solid rgba(255,255,255,0.07)', flexShrink: 0 }}>
+        <div style={{ fontFamily: "'Barlow Condensed',sans-serif", fontSize: 16, fontWeight: 900, color: '#f0f2f5', letterSpacing: 1, textTransform: 'uppercase' }}>Team Sheets</div>
+        <div style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 7, color: '#556070', letterSpacing: 1.5, marginTop: 2 }}>SELECT A SHEET TO EDIT</div>
+      </div>
+      <div style={{ flex: 1, overflowY: 'auto', padding: '10px 14px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {SHEETS.map(s => (
+          <button key={s.id} onClick={() => onSelectSheet(s.id)}
+            style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', cursor: 'pointer', textAlign: 'left', transition: 'all 0.15s' }}
+            onMouseEnter={e => { e.currentTarget.style.background = `${accent}10`; e.currentTarget.style.borderColor = `${accent}55`; }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.03)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)'; }}>
+            <span style={{ fontFamily: "'Barlow Condensed',sans-serif", fontSize: 28, color: accent, lineHeight: 1, flexShrink: 0 }}>{s.icon}</span>
+            <div>
+              <div style={{ fontFamily: "'Barlow Condensed',sans-serif", fontSize: 15, fontWeight: 900, color: '#f0f2f5', letterSpacing: 0.5, textTransform: 'uppercase' }}>{s.label}</div>
+              <div style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 7, color: '#556070', letterSpacing: 1, marginTop: 2 }}>{s.desc}</div>
+            </div>
+            <span style={{ marginLeft: 'auto', fontFamily: "'Barlow Condensed',sans-serif", fontSize: 18, color: '#3b4555' }}>›</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ══════════════════════════════════════════
    MAIN COMPONENT
 ══════════════════════════════════════════ */
 const TABS = [
@@ -715,6 +904,8 @@ export default function Team() {
   const { squad, youthPlayers, formation, setFormation, myClub } = useGameStore();
   const accent = myClub?.color || CLUB_COLOR[myClub?.name] || '#00e87a';
 
+  // hub navigation: null = hub landing, 'tactics' = big card, 'squadhub' = squad hub, 'editplayers' = edit
+  const [hubView, setHubView] = useState(null);
   const [tab, setTab]               = useState('lineup');
   const [selectedPlayer, setSelected] = useState(null);
   const [hoveredId, setHovered]       = useState(null);
@@ -732,140 +923,270 @@ export default function Team() {
   const showCompare = !!(selectedPlayer && hoveredId && hoveredId !== selectedPlayer.id);
   const hoveredPlayer = showCompare ? (squad||[]).find(p=>p.id===hoveredId) || (youthPlayers||[]).find(p=>p.id===hoveredId) : null;
 
+  // Navigate into big card (tactics) at a specific tab
+  const openTactics = (startTab = 'lineup') => {
+    setTab(startTab);
+    setHubView('tactics');
+  };
+
+  // ── Sub-views ──
+  if (hubView === 'squadhub') {
+    return (
+      <>
+        <style>{`@keyframes fadeIn { from{opacity:0} to{opacity:1} }`}</style>
+        <div style={{ height: '100%', overflow: 'hidden', background: 'var(--bg-1)', display: 'flex', flexDirection: 'column', animation: 'fadeIn 0.2s ease' }}>
+          <SquadHubView squad={squad} youthPlayers={youthPlayers} accent={accent} onBack={() => setHubView(null)} />
+        </div>
+      </>
+    );
+  }
+
+  if (hubView === 'editplayers') {
+    return (
+      <>
+        <style>{`@keyframes fadeIn { from{opacity:0} to{opacity:1} }`}</style>
+        <div style={{ height: '100%', overflow: 'hidden', background: 'var(--bg-1)', display: 'flex', flexDirection: 'column', animation: 'fadeIn 0.2s ease' }}>
+          <EditPlayersView squad={squad} accent={accent} onBack={() => setHubView(null)} />
+        </div>
+      </>
+    );
+  }
+
+  if (hubView === 'teamsheets') {
+    return (
+      <>
+        <style>{`@keyframes fadeIn { from{opacity:0} to{opacity:1} }`}</style>
+        <div style={{ height: '100%', overflow: 'hidden', background: 'var(--bg-1)', display: 'flex', animation: 'fadeIn 0.2s ease' }}>
+          {/* Left — sheet picker */}
+          <div style={{ width: 320, flexShrink: 0, display: 'flex', flexDirection: 'column', borderRight: '1px solid rgba(255,255,255,0.07)', overflow: 'hidden' }}>
+            <div style={{ padding: '10px 14px', borderBottom: '1px solid rgba(255,255,255,0.07)', flexShrink: 0 }}>
+              <button onClick={() => setHubView(null)} style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#9aa3b2', fontFamily: "'Barlow Condensed',sans-serif", fontSize: 11, fontWeight: 700, padding: '4px 10px', cursor: 'pointer', letterSpacing: 1 }}>← BACK</button>
+            </div>
+            <TeamSheetsView accent={accent} onSelectSheet={(sheetId) => { setTab(sheetId); }} />
+          </div>
+          {/* Right — tactics big card */}
+          <div style={{ flex: 1, display: 'flex', overflow: 'hidden', position: 'relative' }}>
+            <TacticsBigCard
+              squad={squad} youthPlayers={youthPlayers} formation={formation} setFormation={setFormation}
+              accent={accent} tab={tab} setTab={setTab}
+              selectedPlayer={selectedPlayer} setSelected={setSelected}
+              hoveredId={hoveredId} setHovered={setHovered}
+              pitchIds={pitchIds} pitchAssigned={pitchAssigned}
+              showKitModal={showKitModal} setShowKitModal={setShowKitModal}
+              showCompare={showCompare} hoveredPlayer={hoveredPlayer}
+              handleSelectPlayer={handleSelectPlayer}
+            />
+          </div>
+        </div>
+        {showKitModal && <KitNumberModal squad={squad} accent={accent} onClose={() => setShowKitModal(false)} />}
+      </>
+    );
+  }
+
+  if (hubView === 'tactics') {
+    return (
+      <>
+        <style>{`@keyframes fadeIn { from{opacity:0} to{opacity:1} } select option { background:#0c1018; color:#f0f2f5; }`}</style>
+        <div style={{ height: '100%', display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'var(--bg-1)', animation: 'fadeIn 0.2s ease' }}>
+          {/* Back bar */}
+          <div style={{ flexShrink: 0, padding: '6px 12px', borderBottom: '1px solid rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', gap: 12, background: 'rgba(7,10,15,0.6)' }}>
+            <button onClick={() => setHubView(null)} style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: '#9aa3b2', fontFamily: "'Barlow Condensed',sans-serif", fontSize: 11, fontWeight: 700, padding: '4px 10px', cursor: 'pointer', letterSpacing: 1 }}>← BACK</button>
+            {/* Top tab nav */}
+            <div style={{ display: 'flex', gap: 2 }}>
+              {TABS.map(t => (
+                <button key={t.id} onClick={() => setTab(t.id)} style={{ padding: '5px 14px', background: tab === t.id ? `${accent}18` : 'transparent', border: 'none', borderBottom: tab === t.id ? `2px solid ${accent}` : '2px solid transparent', color: tab === t.id ? accent : '#556070', fontFamily: "'Barlow Condensed',sans-serif", fontSize: 10, fontWeight: 700, fontStyle: 'italic', letterSpacing: 2, textTransform: 'uppercase', cursor: 'pointer', whiteSpace: 'nowrap', transition: 'all 0.15s' }}>{t.label}</button>
+              ))}
+            </div>
+          </div>
+          {/* Main content */}
+          <div style={{ flex: 1, overflow: 'hidden', display: 'grid', gridTemplateColumns: '1fr 1fr', position: 'relative' }}>
+            <TacticsBigCard
+              squad={squad} youthPlayers={youthPlayers} formation={formation} setFormation={setFormation}
+              accent={accent} tab={tab} setTab={setTab}
+              selectedPlayer={selectedPlayer} setSelected={setSelected}
+              hoveredId={hoveredId} setHovered={setHovered}
+              pitchIds={pitchIds} pitchAssigned={pitchAssigned}
+              showKitModal={showKitModal} setShowKitModal={setShowKitModal}
+              showCompare={showCompare} hoveredPlayer={hoveredPlayer}
+              handleSelectPlayer={handleSelectPlayer}
+            />
+          </div>
+        </div>
+        {showKitModal && <KitNumberModal squad={squad} accent={accent} onClose={() => setShowKitModal(false)} />}
+      </>
+    );
+  }
+
+  // ── Default: Hub Landing ──
   return (
     <>
       <style>{`
         @keyframes fadeIn { from{opacity:0} to{opacity:1} }
+        @keyframes hubIn  { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
         select option { background:#0c1018; color:#f0f2f5; }
+        .hub-small-card:hover { border-color: rgba(255,255,255,0.2) !important; background: rgba(255,255,255,0.05) !important; }
       `}</style>
 
-      <div style={{
-        display:'grid',
-        gridTemplateColumns:'1fr 1fr',
-        height:'100%',
-        overflow:'hidden',
-        background:'var(--bg-1)',
-        position:'relative',
-      }}>
+      <div style={{ height: '100%', overflow: 'hidden', background: 'var(--bg-1)', display: 'grid', gridTemplateColumns: '1fr 1.6fr', animation: 'hubIn 0.25s ease' }}>
 
-        {/* ══ LEFT — Pitch ══ */}
-        <div style={{ display:'flex', flexDirection:'column', overflow:'hidden', borderRight:'1px solid rgba(255,255,255,0.07)' }}>
-          <div style={{ flex:1, padding:'8px', overflow:'hidden', display:'flex', alignItems:'stretch' }}>
-            <Pitch
-              formation={formation}
-              squad={squad}
-              selectedId={selectedPlayer?.id}
-              hoveredId={hoveredId}
-              onSelectPlayer={handleSelectPlayer}
-            />
+        {/* ══ LEFT — 2×2 small cards ══ */}
+        <div style={{ display: 'grid', gridTemplateRows: '1fr 1fr', gridTemplateColumns: '1fr 1fr', gap: 1, borderRight: '1px solid rgba(255,255,255,0.07)', background: 'rgba(255,255,255,0.04)' }}>
+
+          {/* Squad — top-left, does nothing, shows badge */}
+          <div className="hub-small-card" style={{ background: 'var(--bg-1)', border: '1px solid rgba(255,255,255,0.06)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '16px', cursor: 'default', transition: 'all 0.15s', position: 'relative', overflow: 'hidden' }}>
+            <div style={{ position: 'absolute', right: -10, top: -10, opacity: 0.06, fontSize: 90, lineHeight: 1, userSelect: 'none', pointerEvents: 'none' }}>◈</div>
+            <div>
+              <div style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 7, color: '#556070', letterSpacing: 2, textTransform: 'uppercase', marginBottom: 6 }}>Squad</div>
+              <div style={{ fontFamily: "'Barlow Condensed',sans-serif", fontSize: 20, fontWeight: 900, color: '#f0f2f5', lineHeight: 1 }}>Club Squad</div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div>
+                <div style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 7, color: accent, letterSpacing: 1 }}>{(squad || []).length} players</div>
+              </div>
+              <ClubBadge club={myClub} size={38} />
+            </div>
           </div>
-          <BenchStrip squad={squad} formation={formation} accent={accent} />
+
+          {/* Squad Hub — top-right */}
+          <div className="hub-small-card" onClick={() => setHubView('squadhub')} style={{ background: 'var(--bg-1)', border: '1px solid rgba(255,255,255,0.06)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '16px', cursor: 'pointer', transition: 'all 0.15s', position: 'relative', overflow: 'hidden' }}>
+            <div style={{ position: 'absolute', right: -10, top: -10, opacity: 0.06, fontSize: 90, lineHeight: 1, userSelect: 'none', pointerEvents: 'none' }}>◎</div>
+            <div>
+              <div style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 7, color: '#556070', letterSpacing: 2, textTransform: 'uppercase', marginBottom: 6 }}>Players</div>
+              <div style={{ fontFamily: "'Barlow Condensed',sans-serif", fontSize: 20, fontWeight: 900, color: '#f0f2f5', lineHeight: 1 }}>Squad Hub</div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 7, color: '#3b4555', letterSpacing: 1 }}>All · Loans · Youth</div>
+              <span style={{ fontFamily: "'Barlow Condensed',sans-serif", fontSize: 22, color: '#3b4555' }}>›</span>
+            </div>
+          </div>
+
+          {/* Team Sheets — bottom-left */}
+          <div className="hub-small-card" onClick={() => setHubView('teamsheets')} style={{ background: 'var(--bg-1)', border: '1px solid rgba(255,255,255,0.06)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '16px', cursor: 'pointer', transition: 'all 0.15s', position: 'relative', overflow: 'hidden' }}>
+            <div style={{ position: 'absolute', right: -10, top: -10, opacity: 0.06, fontSize: 90, lineHeight: 1, userSelect: 'none', pointerEvents: 'none' }}>⬡</div>
+            <div>
+              <div style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 7, color: '#556070', letterSpacing: 2, textTransform: 'uppercase', marginBottom: 6 }}>Tactics</div>
+              <div style={{ fontFamily: "'Barlow Condensed',sans-serif", fontSize: 20, fontWeight: 900, color: '#f0f2f5', lineHeight: 1 }}>Team Sheets</div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 7, color: '#3b4555', letterSpacing: 1 }}>Lineup · Formation · Strategy</div>
+              <span style={{ fontFamily: "'Barlow Condensed',sans-serif", fontSize: 22, color: '#3b4555' }}>›</span>
+            </div>
+          </div>
+
+          {/* Edit Players — bottom-right */}
+          <div className="hub-small-card" onClick={() => setHubView('editplayers')} style={{ background: 'var(--bg-1)', border: '1px solid rgba(255,255,255,0.06)', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '16px', cursor: 'pointer', transition: 'all 0.15s', position: 'relative', overflow: 'hidden' }}>
+            <div style={{ position: 'absolute', right: -10, top: -10, opacity: 0.06, fontSize: 90, lineHeight: 1, userSelect: 'none', pointerEvents: 'none' }}>◇</div>
+            <div>
+              <div style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 7, color: '#556070', letterSpacing: 2, textTransform: 'uppercase', marginBottom: 6 }}>Management</div>
+              <div style={{ fontFamily: "'Barlow Condensed',sans-serif", fontSize: 20, fontWeight: 900, color: '#f0f2f5', lineHeight: 1 }}>Edit Players</div>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 7, color: '#3b4555', letterSpacing: 1 }}>Name · Attributes</div>
+              <span style={{ fontFamily: "'Barlow Condensed',sans-serif", fontSize: 22, color: '#3b4555' }}>›</span>
+            </div>
+          </div>
+
         </div>
 
-        {/* ══ RIGHT — Panel ══ */}
-        <div style={{ display:'flex', flexDirection:'column', overflow:'hidden', paddingBottom:44 }}>
-
-          {tab === 'lineup' && (
-            <div style={{ flex:1, display:'flex', overflow:'hidden' }}>
-              {/* Squad list — always visible, shrinks when panel open */}
-              <div style={{
-                width: selectedPlayer ? '45%' : '100%',
-                flexShrink:0,
-                display:'flex', flexDirection:'column', overflow:'hidden',
-                borderRight: selectedPlayer ? '1px solid rgba(255,255,255,0.06)' : 'none',
-                transition:'width 0.2s ease',
-              }}>
-                <SquadList
-                  squad={squad}
-                  youthPlayers={youthPlayers}
-                  onSelect={handleSelectPlayer}
-                  selectedId={selectedPlayer?.id}
-                  hoveredId={hoveredId}
-                  onHover={setHovered}
-                  accent={accent}
-                  compact={!!selectedPlayer}
-                  pitchIds={pitchIds}
-                  onOpenKitModal={()=>setShowKitModal(true)}
-                />
-              </div>
-
-              {/* Side panel — slides in when player selected */}
-              {selectedPlayer && (
-                <div style={{ flex:1, display:'flex', flexDirection:'column', overflow:'hidden', animation:'fadeIn 0.18s ease' }}>
-                  {/* Close button */}
-                  <div style={{ display:'flex', justifyContent:'flex-end', padding:'6px 10px', borderBottom:'1px solid rgba(255,255,255,0.06)', flexShrink:0 }}>
-                    <button onClick={()=>setSelected(null)} style={{ width:22, height:22, background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.12)', color:'#9aa3b2', fontSize:11, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', lineHeight:1 }}>✕</button>
-                  </div>
-                  {showCompare && hoveredPlayer
-                    ? <ComparePanel playerA={selectedPlayer} playerB={hoveredPlayer} />
-                    : <PlayerCard player={selectedPlayer} accent={accent} />
-                  }
-                </div>
-              )}
-            </div>
-          )}
-
-          {tab === 'formation' && (
-            <div style={{ flex:1, display:'flex', flexDirection:'column', overflow:'hidden' }}>
-              <div style={{ padding:'10px 12px', borderBottom:'1px solid rgba(255,255,255,0.06)', flexShrink:0 }}>
-                <div style={{ fontFamily:"'Share Tech Mono',monospace", fontSize:8, color:'#556070', letterSpacing:2, textTransform:'uppercase', marginBottom:8 }}>Select Formation</div>
-                <div style={{ display:'flex', flexWrap:'wrap', gap:5 }}>
-                  {FORMATIONS.map(f=>(
-                    <button key={f} onClick={()=>setFormation(f)} style={{ padding:'5px 12px', background: formation===f?`${accent}22`:'rgba(255,255,255,0.03)', border:`1px solid ${formation===f?accent:'rgba(255,255,255,0.08)'}`, color: formation===f?accent:'#9aa3b2', fontFamily:"'Barlow Condensed',sans-serif", fontSize:13, fontWeight:900, letterSpacing:0.5, cursor:'pointer' }}>{f}</button>
-                  ))}
-                </div>
-              </div>
-              <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:'16px', gap:8 }}>
-                <div style={{ fontFamily:"'Barlow Condensed',sans-serif", fontSize:48, fontWeight:900, color:accent, lineHeight:1 }}>{formation}</div>
-                <div style={{ fontFamily:"'Share Tech Mono',monospace", fontSize:8, color:'#556070', letterSpacing:2, textTransform:'uppercase' }}>Active formation</div>
-                <div style={{ display:'flex', gap:12, marginTop:8 }}>
-                  {formation.split('-').map((n,i,a)=>{
-                    const labels = ['DEF','MID','FWD'];
-                    const label = i===0?'GK':labels[i-1]||'';
-                    return (
-                      <div key={i} style={{ textAlign:'center' }}>
-                        <div style={{ fontFamily:"'Barlow Condensed',sans-serif", fontSize:28, fontWeight:900, color:'#f0f2f5' }}>{n}</div>
-                        <div style={{ fontFamily:"'Share Tech Mono',monospace", fontSize:7, color:'#556070', letterSpacing:1.5 }}>{i===0?'GK':labels[i-1]}</div>
-                      </div>
-                    );
-                  })}
-                </div>
+        {/* ══ RIGHT — Big Tactics Card ══ */}
+        <div onClick={() => openTactics('lineup')} style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', cursor: 'pointer', position: 'relative' }}>
+          {/* Clickable overlay hint */}
+          <div style={{ position: 'absolute', inset: 0, zIndex: 5, background: 'transparent', transition: 'background 0.15s' }}
+            onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.015)'}
+            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+          />
+          {/* Header */}
+          <div style={{ flexShrink: 0, padding: '14px 16px 10px', borderBottom: '1px solid rgba(255,255,255,0.07)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', zIndex: 6, position: 'relative' }}>
+            <div>
+              <div style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 7, color: '#556070', letterSpacing: 2, textTransform: 'uppercase', marginBottom: 4 }}>Tactics · Formation · Roles</div>
+              <div style={{ fontFamily: "'Barlow Condensed',sans-serif", fontSize: 26, fontWeight: 900, color: '#f0f2f5', lineHeight: 1, letterSpacing: 0.5 }}>
+                {formation} <span style={{ color: accent }}>▶</span>
               </div>
             </div>
-          )}
-
-          {tab === 'strategy' && <StrategyTab accent={accent} />}
-          {tab === 'roles'    && <RolesTab squad={squad} formation={formation} accent={accent} />}
-          {tab === 'gameplan' && <GameplanTab squad={squad} accent={accent} />}
-        </div>
-
-        {/* ══ BOTTOM-RIGHT TAB NAV ══ */}
-        <div style={{
-          position:'absolute', bottom:0, right:0,
-          display:'flex',
-          background:'rgba(7,10,15,0.97)',
-          borderTop:'1px solid rgba(255,255,255,0.08)',
-          borderLeft:'1px solid rgba(255,255,255,0.06)',
-          zIndex:10,
-        }}>
-          {TABS.map(t=>(
-            <button key={t.id} onClick={()=>setTab(t.id)} style={{
-              padding:'8px 14px',
-              background: tab===t.id?`${accent}18`:'transparent',
-              border:'none',
-              borderTop: tab===t.id?`2px solid ${accent}`:'2px solid transparent',
-              color: tab===t.id?accent:'#556070',
-              fontFamily:"'Barlow Condensed',sans-serif",
-              fontSize:10, fontWeight:700, fontStyle:'italic',
-              letterSpacing:2, textTransform:'uppercase',
-              cursor:'pointer', whiteSpace:'nowrap',
-              transition:'all 0.15s',
-            }}>{t.label}</button>
-          ))}
+            <div style={{ display: 'flex', gap: 6 }}>
+              {TABS.map(t => (
+                <span key={t.id} style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 6, color: '#3b4555', letterSpacing: 1, padding: '2px 6px', border: '1px solid rgba(255,255,255,0.06)', textTransform: 'uppercase' }}>{t.label}</span>
+              ))}
+            </div>
+          </div>
+          {/* Pitch preview — not interactive on hub */}
+          <div style={{ flex: 1, overflow: 'hidden', pointerEvents: 'none', padding: '8px', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ flex: 1, overflow: 'hidden' }}>
+              <Pitch formation={formation} squad={squad} selectedId={null} hoveredId={null} onSelectPlayer={() => {}} />
+            </div>
+            <BenchStrip squad={squad} formation={formation} accent={accent} />
+          </div>
+          {/* Open hint */}
+          <div style={{ position: 'absolute', bottom: 12, right: 14, zIndex: 6, fontFamily: "'Barlow Condensed',sans-serif", fontSize: 10, fontWeight: 700, fontStyle: 'italic', color: accent, letterSpacing: 2, textTransform: 'uppercase', opacity: 0.6 }}>Open →</div>
         </div>
 
       </div>
-      {showKitModal && <KitNumberModal squad={squad} accent={accent} onClose={()=>setShowKitModal(false)} />}
+    </>
+  );
+}
+
+/* ══════════════════════════════════════════
+   TACTICS BIG CARD (extracted for reuse)
+══════════════════════════════════════════ */
+function TacticsBigCard({ squad, youthPlayers, formation, setFormation, accent, tab, setTab, selectedPlayer, setSelected, hoveredId, setHovered, pitchIds, pitchAssigned, showKitModal, setShowKitModal, showCompare, hoveredPlayer, handleSelectPlayer }) {
+  return (
+    <>
+      {/* LEFT — Pitch */}
+      <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRight: '1px solid rgba(255,255,255,0.07)' }}>
+        <div style={{ flex: 1, padding: '8px', overflow: 'hidden', display: 'flex', alignItems: 'stretch' }}>
+          <Pitch formation={formation} squad={squad} selectedId={selectedPlayer?.id} hoveredId={hoveredId} onSelectPlayer={handleSelectPlayer} />
+        </div>
+        <BenchStrip squad={squad} formation={formation} accent={accent} />
+      </div>
+
+      {/* RIGHT — Panel */}
+      <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        {tab === 'lineup' && (
+          <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+            <div style={{ width: selectedPlayer ? '45%' : '100%', flexShrink: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', borderRight: selectedPlayer ? '1px solid rgba(255,255,255,0.06)' : 'none', transition: 'width 0.2s ease' }}>
+              <SquadList squad={squad} youthPlayers={youthPlayers} onSelect={handleSelectPlayer} selectedId={selectedPlayer?.id} hoveredId={hoveredId} onHover={setHovered} accent={accent} compact={!!selectedPlayer} pitchIds={pitchIds} onOpenKitModal={() => setShowKitModal(true)} />
+            </div>
+            {selectedPlayer && (
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', animation: 'fadeIn 0.18s ease' }}>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '6px 10px', borderBottom: '1px solid rgba(255,255,255,0.06)', flexShrink: 0 }}>
+                  <button onClick={() => setSelected(null)} style={{ width: 22, height: 22, background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.12)', color: '#9aa3b2', fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}>✕</button>
+                </div>
+                {showCompare && hoveredPlayer ? <ComparePanel playerA={selectedPlayer} playerB={hoveredPlayer} /> : <PlayerCard player={selectedPlayer} accent={accent} />}
+              </div>
+            )}
+          </div>
+        )}
+        {tab === 'formation' && (
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            <div style={{ padding: '10px 12px', borderBottom: '1px solid rgba(255,255,255,0.06)', flexShrink: 0 }}>
+              <div style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 8, color: '#556070', letterSpacing: 2, textTransform: 'uppercase', marginBottom: 8 }}>Select Formation</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                {FORMATIONS.map(f => (
+                  <button key={f} onClick={() => setFormation(f)} style={{ padding: '5px 12px', background: formation === f ? `${accent}22` : 'rgba(255,255,255,0.03)', border: `1px solid ${formation === f ? accent : 'rgba(255,255,255,0.08)'}`, color: formation === f ? accent : '#9aa3b2', fontFamily: "'Barlow Condensed',sans-serif", fontSize: 13, fontWeight: 900, letterSpacing: 0.5, cursor: 'pointer' }}>{f}</button>
+                ))}
+              </div>
+            </div>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '16px', gap: 8 }}>
+              <div style={{ fontFamily: "'Barlow Condensed',sans-serif", fontSize: 48, fontWeight: 900, color: accent, lineHeight: 1 }}>{formation}</div>
+              <div style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 8, color: '#556070', letterSpacing: 2, textTransform: 'uppercase' }}>Active formation</div>
+              <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
+                {formation.split('-').map((n, i) => {
+                  const labels = ['DEF', 'MID', 'FWD'];
+                  return (
+                    <div key={i} style={{ textAlign: 'center' }}>
+                      <div style={{ fontFamily: "'Barlow Condensed',sans-serif", fontSize: 28, fontWeight: 900, color: '#f0f2f5' }}>{n}</div>
+                      <div style={{ fontFamily: "'Share Tech Mono',monospace", fontSize: 7, color: '#556070', letterSpacing: 1.5 }}>{i === 0 ? 'GK' : labels[i - 1]}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+        {tab === 'strategy' && <StrategyTab accent={accent} />}
+        {tab === 'roles'    && <RolesTab squad={squad} formation={formation} accent={accent} />}
+        {tab === 'gameplan' && <GameplanTab squad={squad} accent={accent} />}
+      </div>
     </>
   );
 }

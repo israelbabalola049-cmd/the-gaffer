@@ -379,6 +379,412 @@ function SearchSection({ section, allPlayers, accent, shortlist, budget, handleB
   );
 }
 
+
+/* ── Scout star rating helper ── */
+function ScoutStars({ rating = 3, color = '#f5c518' }) {
+  return (
+    <div style={{ display:'flex', gap:2 }}>
+      {[1,2,3,4,5].map(i=>(
+        <svg key={i} width="9" height="9" viewBox="0 0 24 24" fill={i<=rating?color:'rgba(255,255,255,0.15)'} stroke="none">
+          <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+        </svg>
+      ))}
+    </div>
+  );
+}
+
+/* ── ScoutSection component ── */
+function ScoutSection({
+  section, accent, week, budget,
+  resolvedMissions, activeMissions, completedMissions,
+  scoutRegion, setScoutRegion, scoutPos, setScoutPos,
+  scoutDuration, setScoutDuration, sendScout,
+  scoutScreen, setScoutScreen,
+  activeScout, setActiveScout,
+  scoutReportSel, setScoutReportSel,
+  scoutReportTab, setScoutReportTab,
+  scoutDeepPlayer, setScoutDeepPlayer,
+  shortlist, toggleShortlist, handleBuy, fmt,
+}) {
+
+  /* Build 6 scout slots — fill from missions, pad with empty */
+  const SCOUT_NAMES = ['Christiaan Boogaard','Brian Peters','Milan Van Den Bossche','Joshua Girault','Zander Poulsen','Bento Martins'];
+  const SCOUT_REGIONS_DISPLAY = ['Europe','S. America','Africa','Asia','N. America','Oceania'];
+
+  const slots = SCOUT_NAMES.map((name, i) => {
+    const mission = resolvedMissions[i] || null;
+    return {
+      name,
+      region: mission ? mission.region : SCOUT_REGIONS_DISPLAY[i],
+      players: mission?.done ? mission.results.length : 0,
+      active: mission && !mission.done,
+      done: mission?.done || false,
+      mission,
+      rating: 3 + (i % 3),
+      weeksLeft: mission && !mission.done ? mission.dueWeek - week : null,
+    };
+  });
+
+  /* Active scout's mission results */
+  const activeMission = activeScout !== null ? slots[activeScout]?.mission : null;
+  const reportPlayers = activeMission?.results || [];
+  const tabFiltered = scoutReportTab==='ALL' ? reportPlayers
+    : scoutReportTab==='ATT' ? reportPlayers.filter(p=>['ST','CF','LW','RW','FWD'].includes(p.position))
+    : scoutReportTab==='MID' ? reportPlayers.filter(p=>['CM','CAM','CDM','LM','RM','DM','AM'].includes(p.position))
+    : scoutReportTab==='DEF' ? reportPlayers.filter(p=>['CB','LB','RB','LWB','RWB'].includes(p.position))
+    : reportPlayers.filter(p=>p.position==='GK');
+
+  /* Position breakdown for hub summary */
+  const allFound = completedMissions.flatMap(m=>m.results||[]);
+  const breakdown = {
+    Strikers:    allFound.filter(p=>['ST','CF','FWD'].includes(p.position)).length,
+    Midfielders: allFound.filter(p=>['CM','CAM','CDM','LM','RM','DM','AM'].includes(p.position)).length,
+    Defenders:   allFound.filter(p=>['CB','LB','RB','LWB','RWB'].includes(p.position)).length,
+    Goalkeepers: allFound.filter(p=>p.position==='GK').length,
+  };
+
+  const BG = 'rgba(255,255,255,0.03)';
+  const BORDER = '1px solid rgba(255,255,255,0.08)';
+
+  /* ── Screen: HUB ── */
+  if (scoutScreen === 'hub') return (
+    <BentoBox style={{ gridColumn: section?'1':'3', gridRow: section?'1':'1/3', padding:0, display:'flex', flexDirection:'column', overflow:'hidden' }}>
+      {/* Header breadcrumb */}
+      <div style={{ padding:'8px 14px', borderBottom:'1px solid rgba(255,255,255,0.07)', display:'flex', alignItems:'center', gap:6, flexShrink:0 }}>
+        <span style={{ fontFamily:"var(--font-mono)", fontSize:8, color:'#556070', letterSpacing:2, textTransform:'uppercase' }}>Transfers</span>
+        <span style={{ color:'#3b4555' }}>›</span>
+        <span style={{ fontFamily:"var(--font-mono)", fontSize:8, color:accent, letterSpacing:2, textTransform:'uppercase' }}>Scouting Network</span>
+      </div>
+
+      <div style={{ flex:1, display:'flex', overflow:'hidden' }}>
+
+        {/* Left — 6 scout slots */}
+        <div style={{ flex:1, padding:10, display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gridTemplateRows:'1fr 1fr', gap:8, overflow:'hidden' }}>
+          {slots.map((s, i) => (
+            <div key={i}
+              onClick={()=>{ setActiveScout(i); setScoutScreen('report'); setScoutReportSel(null); setScoutReportTab('ALL'); }}
+              style={{
+                background: activeScout===i ? `${accent}18` : s.done ? 'rgba(0,232,122,0.06)' : s.active ? 'rgba(245,197,24,0.06)' : BG,
+                border: `1px solid ${activeScout===i ? accent : s.done ? 'rgba(0,232,122,0.2)' : s.active ? 'rgba(245,197,24,0.2)' : 'rgba(255,255,255,0.08)'}`,
+                borderRadius:2, padding:'10px 10px', cursor:'pointer',
+                display:'flex', flexDirection:'column', gap:6,
+                transition:'all 0.12s', position:'relative', overflow:'hidden',
+              }}
+              onMouseEnter={e=>{ e.currentTarget.style.background = s.done?'rgba(0,232,122,0.1)':'rgba(255,255,255,0.05)'; }}
+              onMouseLeave={e=>{ e.currentTarget.style.background = s.done?'rgba(0,232,122,0.06)':s.active?'rgba(245,197,24,0.06)':BG; }}
+            >
+              {/* Status dot */}
+              <div style={{ position:'absolute', top:8, right:8 }}>
+                {s.active && <div style={{ width:7, height:7, borderRadius:'50%', background:'#f5c518', animation:'scoutPulse 1.5s infinite' }} />}
+                {s.done  && <div style={{ width:7, height:7, borderRadius:'50%', background:'#00e87a' }} />}
+              </div>
+
+              {/* Name */}
+              <div style={{ fontFamily:"var(--font-display)", fontSize:10, fontWeight:900, fontStyle:'italic', color:'#f0f2f5', lineHeight:1.2, textTransform:'uppercase', letterSpacing:0.5 }}>{s.name}</div>
+
+              {/* Region label */}
+              <div style={{ fontFamily:"var(--font-mono)", fontSize:7, color:'#556070', letterSpacing:1 }}>Area Scouting</div>
+
+              {/* Players found */}
+              <div style={{ display:'flex', alignItems:'center', gap:5 }}>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#9aa3b2" strokeWidth="1.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+                <span style={{ fontFamily:"var(--font-display)", fontSize:13, fontWeight:900, color: s.players>0?accent:'#3b4555' }}>{s.players}</span>
+                {s.active && s.weeksLeft && <span style={{ fontFamily:"var(--font-mono)", fontSize:6, color:'#f5c518' }}>W{s.weeksLeft} left</span>}
+              </div>
+
+              {/* Stars */}
+              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+                <div style={{ fontFamily:"var(--font-mono)", fontSize:6, color:'#445060', letterSpacing:1 }}>Judgment</div>
+                <ScoutStars rating={s.rating} color={accent} />
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Right — summary panel */}
+        <div style={{ width:180, flexShrink:0, borderLeft:'1px solid rgba(255,255,255,0.07)', display:'flex', flexDirection:'column', padding:12, gap:12, overflow:'hidden' }}>
+          <div style={{ fontFamily:"var(--font-display)", fontSize:13, fontWeight:900, fontStyle:'italic', color:'#f0f2f5', textTransform:'uppercase', letterSpacing:0.5, lineHeight:1.2 }}>Scouted Players Summary</div>
+
+          <div>
+            <div style={{ fontFamily:"var(--font-mono)", fontSize:7, color:'#556070', letterSpacing:1.5, textTransform:'uppercase', marginBottom:4 }}>Players Scouted</div>
+            <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9aa3b2" strokeWidth="1.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+              <span style={{ fontFamily:"var(--font-display)", fontSize:24, fontWeight:900, color:'#f0f2f5' }}>{allFound.length}</span>
+            </div>
+          </div>
+
+          <div style={{ display:'flex', gap:10 }}>
+            <div style={{ display:'flex', alignItems:'center', gap:5 }}>
+              <div style={{ width:6, height:6, borderRadius:'50%', background:'#00e87a' }} />
+              <span style={{ fontFamily:"var(--font-mono)", fontSize:7, color:'#00e87a' }}>0 New</span>
+            </div>
+            <div style={{ display:'flex', alignItems:'center', gap:5 }}>
+              <div style={{ width:6, height:6, borderRadius:'50%', background:'#f5c518' }} />
+              <span style={{ fontFamily:"var(--font-mono)", fontSize:7, color:'#f5c518' }}>0 Updates</span>
+            </div>
+          </div>
+
+          {/* Donut placeholder */}
+          <div style={{ display:'flex', justifyContent:'center', padding:'4px 0' }}>
+            <svg width="72" height="72" viewBox="0 0 72 72">
+              <circle cx="36" cy="36" r="28" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="12"/>
+              {allFound.length > 0 && (
+                <circle cx="36" cy="36" r="28" fill="none" stroke={accent} strokeWidth="12"
+                  strokeDasharray={`${(breakdown.Midfielders/allFound.length)*176} 176`}
+                  strokeLinecap="round" transform="rotate(-90 36 36)"/>
+              )}
+            </svg>
+          </div>
+
+          {/* Breakdown */}
+          <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+            {[['Strikers','#ff3b5c'],['Midfielders',accent],['Defenders','#3b82f6'],['Goalkeepers','#f5c518']].map(([pos,col])=>(
+              <div key={pos} style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+                <div style={{ display:'flex', alignItems:'center', gap:5 }}>
+                  <div style={{ width:6, height:6, borderRadius:'50%', background:col }} />
+                  <span style={{ fontFamily:"var(--font-mono)", fontSize:7, color:'#9aa3b2' }}>{pos}</span>
+                </div>
+                <span style={{ fontFamily:"var(--font-display)", fontSize:11, fontWeight:900, color:col }}>{breakdown[pos]}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* Deploy new scout button */}
+          <button onClick={()=>sendScout()} style={{ marginTop:'auto', padding:'7px 8px', background:`${accent}18`, border:`1px solid ${accent}44`, color:accent, fontFamily:"var(--font-display)", fontSize:9, fontWeight:900, fontStyle:'italic', letterSpacing:1.5, textTransform:'uppercase', cursor:'pointer' }}>
+            Deploy Scout
+          </button>
+        </div>
+      </div>
+    </BentoBox>
+  );
+
+  /* ── Screen: REPORT ── */
+  if (scoutScreen === 'report') {
+    const scout = slots[activeScout];
+    return (
+      <BentoBox style={{ gridColumn: section?'1':'3', gridRow: section?'1':'1/3', padding:0, display:'flex', flexDirection:'column', overflow:'hidden' }}>
+        {/* Breadcrumb */}
+        <div style={{ padding:'8px 14px', borderBottom:'1px solid rgba(255,255,255,0.07)', display:'flex', alignItems:'center', gap:6, flexShrink:0 }}>
+          <button onClick={()=>setScoutScreen('hub')} style={{ background:'none', border:'none', color:'#556070', cursor:'pointer', fontFamily:"var(--font-mono)", fontSize:8, letterSpacing:1, display:'flex', alignItems:'center', gap:4 }}>
+            <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6"/></svg>Scouts
+          </button>
+          <span style={{ color:'#3b4555' }}>›</span>
+          <span style={{ fontFamily:"var(--font-mono)", fontSize:8, color:accent, letterSpacing:2, textTransform:'uppercase' }}>Scout Report</span>
+        </div>
+
+        {/* Scout name bar */}
+        <div style={{ padding:'8px 14px', borderBottom:'1px solid rgba(255,255,255,0.06)', display:'flex', alignItems:'center', gap:10, flexShrink:0 }}>
+          <div style={{ width:32, height:32, background:`${accent}18`, border:`1px solid ${accent}33`, borderRadius:2, display:'flex', alignItems:'center', justifyContent:'center' }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={accent} strokeWidth="1.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+          </div>
+          <div>
+            <div style={{ fontFamily:"var(--font-display)", fontSize:13, fontWeight:900, fontStyle:'italic', color:'#f0f2f5' }}>{scout?.name}</div>
+            <div style={{ fontFamily:"var(--font-mono)", fontSize:7, color:'#556070', letterSpacing:1 }}>Area Scouting · {scout?.region}</div>
+          </div>
+          <ScoutStars rating={scout?.rating||3} color={accent} />
+        </div>
+
+        {/* Pos tabs */}
+        <div style={{ display:'flex', alignItems:'flex-end', borderBottom:'2px solid rgba(255,255,255,0.07)', paddingLeft:4, flexShrink:0 }}>
+          {['ALL','ATT','MID','DEF','GK'].map(t=>(
+            <button key={t} onClick={()=>setScoutReportTab(t)} style={{ padding:'7px 14px', background:'transparent', border:'none', borderBottom: scoutReportTab===t?`2px solid ${accent}`:'2px solid transparent', marginBottom:'-2px', color: scoutReportTab===t?'#f0f2f5':'#556070', fontFamily:"var(--font-display)", fontSize:9, fontWeight:900, fontStyle:'italic', letterSpacing:1, textTransform:'uppercase', cursor:'pointer', transition:'all 0.12s' }}>{t}</button>
+          ))}
+        </div>
+
+        {/* Body: list + detail */}
+        <div style={{ flex:1, display:'flex', overflow:'hidden' }}>
+
+          {/* Left list */}
+          <div style={{ width:'45%', flexShrink:0, borderRight:'1px solid rgba(255,255,255,0.07)', display:'flex', flexDirection:'column', overflow:'hidden' }}>
+            <div style={{ padding:'6px 10px', borderBottom:'1px solid rgba(255,255,255,0.05)', flexShrink:0 }}>
+              <span style={{ fontFamily:"var(--font-display)", fontSize:11, fontWeight:900, fontStyle:'italic', color:'#f0f2f5', textTransform:'uppercase' }}>
+                {scout?.done ? 'Players Found' : scout?.active ? 'Scouting…' : 'No Mission'}
+              </span>
+            </div>
+            <div style={{ flex:1, overflowY:'auto' }}>
+              {tabFiltered.length === 0 ? (
+                <div style={{ padding:20, textAlign:'center', fontFamily:"var(--font-mono)", fontSize:8, color:'#3b4555', letterSpacing:2 }}>
+                  {scout?.active ? 'SCOUTING IN PROGRESS' : 'NO PLAYERS FOUND'}
+                </div>
+              ) : tabFiltered.map((p,i)=>{
+                const isSel = scoutReportSel?.id===p.id;
+                return (
+                  <div key={p.id}
+                    onClick={()=>setScoutReportSel(p)}
+                    onDoubleClick={()=>{ setScoutReportSel(p); setScoutDeepPlayer(p); setScoutScreen('player'); }}
+                    className="tr-hov"
+                    style={{ display:'flex', alignItems:'center', gap:8, padding:'8px 10px', borderBottom:'1px solid rgba(255,255,255,0.04)', cursor:'pointer', background: isSel?`${accent}12`:'transparent', borderLeft: isSel?`3px solid ${accent}`:'3px solid transparent', transition:'all 0.1s' }}>
+                    <div style={{ width:36, height:36, background:`${posColor(p.position)}18`, border:`1px solid ${posColor(p.position)}33`, borderRadius:2, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, flexDirection:'column', gap:1 }}>
+                      <span style={{ fontFamily:"var(--font-display)", fontSize:11, fontWeight:900, color:ovrColor(p.overall) }}>{p.overall}</span>
+                    </div>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontFamily:"var(--font-display)", fontSize:11, fontWeight:700, color: isSel?'#f0f2f5':'#c8d0da', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p.name}</div>
+                      <div style={{ display:'flex', gap:6, marginTop:2 }}>
+                        <span style={{ fontFamily:"var(--font-mono)", fontSize:7, color:posColor(p.position) }}>{p.position}</span>
+                        <span style={{ fontFamily:"var(--font-mono)", fontSize:7, color:'#3b4555' }}>Age {p.age}</span>
+                      </div>
+                    </div>
+                    <img src={`https://flagcdn.com/w20/${nationalityToCode(p.nationality)}.png`} alt="" style={{ height:10, borderRadius:1, flexShrink:0 }} onError={e=>e.target.style.display='none'} />
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Right detail */}
+          <div style={{ flex:1, display:'flex', flexDirection:'column', overflow:'hidden' }}>
+            {!scoutReportSel ? (
+              <div style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', flexDirection:'column', gap:10 }}>
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#1e2a38" strokeWidth="1.2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+                <span style={{ fontFamily:"var(--font-mono)", fontSize:8, color:'#1e2a38', letterSpacing:3, textTransform:'uppercase' }}>Select a player</span>
+                <span style={{ fontFamily:"var(--font-mono)", fontSize:7, color:'#1e2a38', letterSpacing:1 }}>Double-click for full profile</span>
+              </div>
+            ) : (
+              <div style={{ flex:1, display:'flex', flexDirection:'column', overflow:'hidden' }}>
+                {/* Player header */}
+                <div style={{ padding:'14px 16px', borderBottom:'1px solid rgba(255,255,255,0.07)', position:'relative', overflow:'hidden', flexShrink:0 }}>
+                  <div style={{ position:'absolute', right:-10, top:-14, fontFamily:"var(--font-display)", fontSize:120, fontWeight:900, color:'rgba(255,255,255,0.03)', lineHeight:1, userSelect:'none' }}>{scoutReportSel.overall}</div>
+                  <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
+                    <span style={{ fontFamily:"var(--font-mono)", fontSize:8, color:'#556070' }}>{scoutReportSel.club}</span>
+                    <img src={`https://flagcdn.com/w20/${nationalityToCode(scoutReportSel.nationality)}.png`} alt="" style={{ height:11, borderRadius:1, marginLeft:'auto' }} onError={e=>e.target.style.display='none'} />
+                  </div>
+                  <div style={{ display:'flex', alignItems:'flex-end', justifyContent:'space-between' }}>
+                    <div>
+                      <div style={{ fontFamily:"var(--font-display)", fontSize:20, fontWeight:900, fontStyle:'italic', color:'#f0f2f5', lineHeight:1 }}>{scoutReportSel.name}</div>
+                      <div style={{ display:'flex', gap:10, marginTop:5 }}>
+                        <span style={{ fontFamily:"var(--font-mono)", fontSize:8, color:'#556070' }}>Age {scoutReportSel.age}</span>
+                        <span style={{ fontFamily:"var(--font-display)", fontSize:9, fontWeight:700, fontStyle:'italic', color:posColor(scoutReportSel.position) }}>{scoutReportSel.position}</span>
+                      </div>
+                      <div style={{ fontFamily:"var(--font-mono)", fontSize:7, color:'#3b4555', marginTop:4, letterSpacing:1 }}>Found by scout {scout?.name?.split(' ').slice(-1)[0]}</div>
+                    </div>
+                    <div style={{ textAlign:'right' }}>
+                      <div style={{ fontFamily:"var(--font-display)", fontSize:40, fontWeight:900, color:ovrColor(scoutReportSel.overall), lineHeight:1 }}>{scoutReportSel.overall}</div>
+                      <div style={{ fontFamily:"var(--font-mono)", fontSize:6, color:'#556070', letterSpacing:2 }}>OVR</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Summary stats — shown/hidden ranges like FIFA */}
+                <div style={{ flex:1, overflowY:'auto', padding:'10px 16px' }}>
+                  <div style={{ fontFamily:"var(--font-mono)", fontSize:7, color:'#445060', letterSpacing:2, textTransform:'uppercase', marginBottom:8 }}>Summary</div>
+                  {[['Athleticism',scoutReportSel.pace??70],['Technical',scoutReportSel.dribbling??70],['Shooting',scoutReportSel.shooting??70],['Passing',scoutReportSel.passing??70],['Defending',scoutReportSel.defending??70],['Mentality',scoutReportSel.physical??70]].map(([lbl,val])=>{
+                    const c=val>=85?'#f5c518':val>=75?'#00e87a':val>=60?'#3b82f6':'#9aa3ae';
+                    const lo=Math.max(0,val-8), hi=Math.min(99,val+8);
+                    return (
+                      <div key={lbl} style={{ display:'flex', alignItems:'center', gap:8, padding:'5px 0', borderBottom:'1px solid rgba(255,255,255,0.04)' }}>
+                        <span style={{ fontFamily:"var(--font-mono)", fontSize:7, color:'#556070', width:70, flexShrink:0 }}>{lbl}</span>
+                        <div style={{ flex:1, height:3, background:'rgba(255,255,255,0.07)', borderRadius:2, overflow:'hidden' }}>
+                          <div style={{ width:`${val}%`, height:'100%', background:c }} />
+                        </div>
+                        <span style={{ fontFamily:"var(--font-display)", fontSize:10, fontWeight:900, color:c, width:36, textAlign:'right', flexShrink:0 }}>{lo} - {hi}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Actions */}
+                <div style={{ padding:'10px 16px', borderTop:'1px solid rgba(255,255,255,0.07)', display:'flex', gap:8, flexShrink:0 }}>
+                  <button onClick={()=>{ setScoutDeepPlayer(scoutReportSel); setScoutScreen('player'); }} style={{ flex:1, padding:'9px', background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.1)', color:'#9aa3b2', fontFamily:"var(--font-display)", fontSize:10, fontWeight:900, fontStyle:'italic', letterSpacing:1.5, textTransform:'uppercase', cursor:'pointer' }}>Full Profile</button>
+                  <button onClick={()=>toggleShortlist(scoutReportSel)} style={{ flex:1, padding:'9px', background:`${accent}18`, border:`1px solid ${accent}44`, color:accent, fontFamily:"var(--font-display)", fontSize:10, fontWeight:900, fontStyle:'italic', letterSpacing:1.5, textTransform:'uppercase', cursor:'pointer' }}>
+                    {shortlist.some(s=>s.id===scoutReportSel.id)?'Shortlisted':'Shortlist'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </BentoBox>
+    );
+  }
+
+  /* ── Screen: PLAYER DEEP DIVE ── */
+  if (scoutScreen === 'player' && scoutDeepPlayer) {
+    const p = scoutDeepPlayer;
+    const oc = ovrColor(p.overall);
+    const pc = posColor(p.position);
+    return (
+      <BentoBox style={{ gridColumn: section?'1':'3', gridRow: section?'1':'1/3', padding:0, display:'flex', flexDirection:'column', overflow:'hidden' }}>
+        {/* Breadcrumb */}
+        <div style={{ padding:'8px 14px', borderBottom:'1px solid rgba(255,255,255,0.07)', display:'flex', alignItems:'center', gap:6, flexShrink:0 }}>
+          <button onClick={()=>setScoutScreen('report')} style={{ background:'none', border:'none', color:'#556070', cursor:'pointer', fontFamily:"var(--font-mono)", fontSize:8, letterSpacing:1, display:'flex', alignItems:'center', gap:4 }}>
+            <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="15 18 9 12 15 6"/></svg>Report
+          </button>
+          <span style={{ color:'#3b4555' }}>›</span>
+          <span style={{ fontFamily:"var(--font-mono)", fontSize:8, color:accent, letterSpacing:2, textTransform:'uppercase' }}>{p.name}</span>
+        </div>
+
+        <div style={{ flex:1, overflowY:'auto', padding:'14px 18px', display:'flex', flexDirection:'column', gap:16 }}>
+          {/* Top section */}
+          <div style={{ display:'flex', gap:16, alignItems:'flex-start' }}>
+            {/* Avatar */}
+            <div style={{ width:80, height:80, background:`${pc}18`, border:`1px solid ${pc}33`, borderRadius:2, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke={pc} strokeWidth="1"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            </div>
+            <div style={{ flex:1 }}>
+              <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
+                <span style={{ fontFamily:"var(--font-mono)", fontSize:9, color:pc, letterSpacing:2 }}>{p.position}</span>
+                <img src={`https://flagcdn.com/w20/${nationalityToCode(p.nationality)}.png`} alt="" style={{ height:12 }} onError={e=>e.target.style.display='none'} />
+              </div>
+              <div style={{ fontFamily:"var(--font-display)", fontSize:26, fontWeight:900, fontStyle:'italic', color:'#f0f2f5', lineHeight:1, marginBottom:6 }}>{p.name}</div>
+              <div style={{ display:'flex', gap:16 }}>
+                <div><span style={{ fontFamily:"var(--font-display)", fontSize:22, fontWeight:900, color:oc }}>{p.overall}</span><span style={{ fontFamily:"var(--font-mono)", fontSize:7, color:'#556070', marginLeft:4 }}>OVR</span></div>
+                <div><span style={{ fontFamily:"var(--font-mono)", fontSize:8, color:'#9aa3b2' }}>Age </span><span style={{ fontFamily:"var(--font-display)", fontSize:14, fontWeight:900, color:'#f0f2f5' }}>{p.age}</span></div>
+              </div>
+            </div>
+          </div>
+
+          {/* Info grid */}
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:8 }}>
+            {[['Club',p.club||'—'],['Nationality',p.nationality||'—'],['Height','—'],['Preferred Foot',p.foot||'Right'],['Value',fmt(p.value||0)],['Weekly Wage',p.wage?`£${(p.wage/1e3).toFixed(0)}K/w`:'—']].map(([l,v])=>(
+              <div key={l} style={{ background:'rgba(255,255,255,0.02)', border:'1px solid rgba(255,255,255,0.06)', padding:'7px 10px' }}>
+                <div style={{ fontFamily:"var(--font-display)", fontSize:11, fontWeight:700, color:'#d0d4da' }}>{v}</div>
+                <div style={{ fontFamily:"var(--font-mono)", fontSize:6, color:'#445060', letterSpacing:1, textTransform:'uppercase', marginTop:2 }}>{l}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Full stats */}
+          <div>
+            <div style={{ fontFamily:"var(--font-mono)", fontSize:7, color:'#445060', letterSpacing:2, textTransform:'uppercase', marginBottom:10 }}>Attributes</div>
+            {[['PAC',p.pace??70],['SHO',p.shooting??70],['PAS',p.passing??70],['DRI',p.dribbling??70],['DEF',p.defending??70],['PHY',p.physical??70]].map(([lbl,val])=>{
+              const c=val>=85?'#f5c518':val>=75?'#00e87a':val>=60?'#3b82f6':'#9aa3ae';
+              return (
+                <div key={lbl} style={{ display:'flex', alignItems:'center', gap:12, padding:'7px 0', borderBottom:'1px solid rgba(255,255,255,0.04)' }}>
+                  <span style={{ fontFamily:"var(--font-mono)", fontSize:9, color:'#556070', letterSpacing:1.5, width:32, flexShrink:0 }}>{lbl}</span>
+                  <div style={{ flex:1, height:3, background:'rgba(255,255,255,0.07)', borderRadius:2, overflow:'hidden' }}>
+                    <div style={{ width:`${val}%`, height:'100%', background:c }} />
+                  </div>
+                  <span style={{ fontFamily:"var(--font-display)", fontSize:15, fontWeight:900, color:c, width:28, textAlign:'right', flexShrink:0 }}>{val}</span>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Scout notes */}
+          <div style={{ background:'rgba(255,255,255,0.02)', border:'1px solid rgba(255,255,255,0.06)', padding:'10px 12px' }}>
+            <div style={{ fontFamily:"var(--font-mono)", fontSize:7, color:'#445060', letterSpacing:2, textTransform:'uppercase', marginBottom:6 }}>Scouting Notes</div>
+            <div style={{ fontFamily:"var(--font-display)", fontSize:10, fontStyle:'italic', color:'#9aa3b2', lineHeight:1.6 }}>
+              {p.overall>=82?'World-class talent. Highly recommended signing.'
+               :p.overall>=75?'Strong player with good potential. Worth pursuing.'
+               :'Decent option. May suit rotation or development role.'}
+            </div>
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div style={{ padding:'10px 18px', borderTop:'1px solid rgba(255,255,255,0.07)', display:'flex', gap:10, flexShrink:0 }}>
+          <button onClick={()=>handleBuy(p)} style={{ flex:2, padding:'10px', background:`${accent}22`, border:`1px solid ${accent}55`, color:accent, fontFamily:"var(--font-display)", fontSize:12, fontWeight:900, fontStyle:'italic', letterSpacing:2, textTransform:'uppercase', cursor:'pointer' }}>Make Offer</button>
+          <button onClick={()=>toggleShortlist(p)} style={{ flex:1, padding:'10px', background: shortlist.some(s=>s.id===p.id)?'rgba(255,59,92,0.08)':'rgba(255,255,255,0.04)', border:`1px solid ${shortlist.some(s=>s.id===p.id)?'rgba(255,59,92,0.3)':'rgba(255,255,255,0.1)'}`, color: shortlist.some(s=>s.id===p.id)?'#ff3b5c':'#9aa3b2', fontFamily:"var(--font-display)", fontSize:12, fontWeight:900, fontStyle:'italic', letterSpacing:1, textTransform:'uppercase', cursor:'pointer' }}>
+            {shortlist.some(s=>s.id===p.id)?'Shortlisted':'Shortlist'}
+          </button>
+        </div>
+      </BentoBox>
+    );
+  }
+
+  return null;
+}
+
 export default function Transfers() {
   const { myClub, squad, youthPlayers, allPlayers, allClubs, allLeagues, budget, week, buyPlayer, sellPlayer, promoteYouthPlayer } = useGameStore();
   const accent = myClub?.color || CLUB_COLOR[myClub?.name] || '#00e87a';
@@ -439,6 +845,11 @@ export default function Transfers() {
   const [scoutDuration, setScoutDuration] = useState(SCOUT_DURATIONS[1]);
   const [missions, setMissions]           = useState([]);
   const [viewMission,   setViewMission]   = useState(null);
+  const [scoutScreen,   setScoutScreen]   = useState('hub');    // 'hub' | 'report' | 'player'
+  const [activeScout,   setActiveScout]   = useState(null);     // selected scout slot
+  const [scoutReportSel, setScoutReportSel] = useState(null);   // selected player in report
+  const [scoutReportTab, setScoutReportTab] = useState('ALL');   // ALL ATT MID DEF GK
+  const [scoutDeepPlayer, setScoutDeepPlayer] = useState(null); // double-click player
 
   const resolvedMissions = useMemo(() =>
     missions.map(m => (!m.done && week >= m.dueWeek)
@@ -788,93 +1199,22 @@ export default function Transfers() {
         />}
 
                 {/* ═══════════════════════════════
-            BOX 3 — SCOUT (tall right)
-            row: 1/3, col: 3
+            BOX 3 — SCOUT (FIFA-style)
         ═══════════════════════════════ */}
-        {(section === 'scout' || !section) && <BentoBox style={{ gridColumn: section?'1':'3', gridRow: section?'1':'1/3' }}>
-          <BoxHeader label="Scout" accent={accent} />
-
-          {/* Form */}
-          <div style={{ padding:'7px 10px', borderBottom:'1px solid rgba(255,255,255,0.06)', flexShrink:0, display:'flex', flexDirection:'column', gap:7 }}>
-            <div>
-              <div style={{ fontFamily:"var(--font-mono)", fontSize:6, color:'#556070', letterSpacing:1.5, textTransform:'uppercase', marginBottom:3 }}>Region</div>
-              <div style={{ display:'flex', flexWrap:'wrap', gap:3 }}>
-                {SCOUT_REGIONS.map(r=>(
-                  <Pill key={r} text={r} active={scoutRegion===r} accent={accent} onClick={()=>setScoutRegion(r)} small />
-                ))}
-              </div>
-            </div>
-            <div>
-              <div style={{ fontFamily:"var(--font-mono)", fontSize:6, color:'#556070', letterSpacing:1.5, textTransform:'uppercase', marginBottom:3 }}>Position</div>
-              <div style={{ display:'flex', flexWrap:'wrap', gap:3 }}>
-                {SCOUT_POSITIONS.map(p=>(
-                  <Pill key={p} text={p} active={scoutPos===p} accent={accent} onClick={()=>setScoutPos(p)} small />
-                ))}
-              </div>
-            </div>
-            <div>
-              <div style={{ fontFamily:"var(--font-mono)", fontSize:6, color:'#556070', letterSpacing:1.5, textTransform:'uppercase', marginBottom:3 }}>Duration</div>
-              <div style={{ display:'flex', gap:3 }}>
-                {SCOUT_DURATIONS.map(d=>(
-                  <button key={d.label} onClick={()=>setScoutDuration(d)} style={{ flex:1, padding:'4px 3px', background: scoutDuration.label===d.label?`${accent}22`:'rgba(255,255,255,0.03)', border:`1px solid ${scoutDuration.label===d.label?accent:'rgba(255,255,255,0.06)'}`, color: scoutDuration.label===d.label?accent:'#556070', fontFamily:"var(--font-display)", fontSize:9, fontWeight:700, fontStyle:'italic', cursor:'pointer', textAlign:'center' }}>
-                    <div>{d.label}</div>
-                    <div style={{ fontFamily:"var(--font-mono)", fontSize:5, color: scoutDuration.label===d.label?`${accent}88`:'#3a4455', letterSpacing:1 }}>{d.quality}</div>
-                  </button>
-                ))}
-              </div>
-            </div>
-            <button onClick={sendScout} style={{ width:'100%', padding:'6px', background:`${accent}18`, border:`1px solid ${accent}44`, color:accent, fontFamily:"var(--font-display)", fontSize:10, fontWeight:900, fontStyle:'italic', letterSpacing:2, textTransform:'uppercase', cursor:'pointer' }}>
-              Deploy
-            </button>
-          </div>
-
-          {/* Missions */}
-          <div style={{ flex:1, overflowY:'auto' }}>
-            {resolvedMissions.length === 0 && (
-              <div style={{ padding:14, textAlign:'center', fontFamily:"var(--font-mono)", fontSize:7, color:'#556070', letterSpacing:1.5, opacity:0.5 }}>No missions</div>
-            )}
-            {activeMissions.map(m=>(
-              <div key={m.id} style={{ padding:'6px 10px', borderBottom:'1px solid rgba(255,255,255,0.04)', display:'flex', alignItems:'center', gap:6 }}>
-                <div style={{ width:5, height:5, borderRadius:'50%', background:'#f5c518', animation:'scoutPulse 1.5s ease-in-out infinite', flexShrink:0 }} />
-                <div style={{ flex:1, minWidth:0 }}>
-                  <div style={{ fontFamily:"var(--font-display)", fontSize:9, fontWeight:700, fontStyle:'italic', color:'#f0f2f5', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{m.region} · {m.posFilter}</div>
-                  <div style={{ fontFamily:"var(--font-mono)", fontSize:6, color:'#556070', letterSpacing:1 }}>{m.quality} · W{m.dueWeek-week} left</div>
-                </div>
-              </div>
-            ))}
-            {completedMissions.map(m=>(
-              <div key={m.id} onClick={()=>{ setViewMission(viewMission?.id===m.id?null:m); setSelScoutPlayer(null); }} style={{ padding:'6px 10px', borderBottom:'1px solid rgba(255,255,255,0.04)', display:'flex', alignItems:'center', gap:6, cursor:'pointer', background: viewMission?.id===m.id?`${accent}10`:'transparent', borderLeft: viewMission?.id===m.id?`2px solid ${accent}`:'2px solid transparent' }}
-                onMouseEnter={e=>{if(viewMission?.id!==m.id)e.currentTarget.style.background='rgba(255,255,255,0.02)';}}
-                onMouseLeave={e=>{if(viewMission?.id!==m.id)e.currentTarget.style.background='transparent';}}
-              >
-                <div style={{ width:5, height:5, borderRadius:'50%', background:'#00e87a', flexShrink:0 }} />
-                <div style={{ flex:1, minWidth:0 }}>
-                  <div style={{ fontFamily:"var(--font-display)", fontSize:9, fontWeight:700, fontStyle:'italic', color:'#f0f2f5', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{m.region} · {m.posFilter}</div>
-                  <div style={{ fontFamily:"var(--font-mono)", fontSize:6, color:'#00e87a', letterSpacing:1 }}>{m.results.length} found · {m.quality}</div>
-                </div>
-                <svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="#556070" strokeWidth="2.5"><polyline points={viewMission?.id===m.id?"18 15 12 9 6 15":"9 18 15 12 9 6"}/></svg>
-              </div>
-            ))}
-
-            {/* Expanded mission results */}
-            {viewMission && (
-              <div style={{ borderTop:'1px solid rgba(255,255,255,0.06)' }}>
-                {viewMission.results.map((p,i)=>(
-                  <div key={p.id} onClick={()=>setSelScoutPlayer(p)} className="tr-hov" style={{ display:'grid', gridTemplateColumns:'16px 1fr 24px 26px', padding:'4px 10px', alignItems:'center', cursor:'pointer', background: selScoutPlayer?.id===p.id?`${accent}12`:'transparent', borderLeft: selScoutPlayer?.id===p.id?`2px solid ${accent}`:'2px solid transparent', borderBottom:'1px solid rgba(255,255,255,0.03)' }}>
-                    <span style={{ fontFamily:"var(--font-mono)", fontSize:6, color:'#556070' }}>{i+1}</span>
-                    <div style={{ minWidth:0 }}>
-                      <div style={{ fontFamily:"var(--font-display)", fontSize:9, fontWeight:700, color:'#f0f2f5', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p.name}</div>
-                      <div style={{ fontFamily:"var(--font-mono)", fontSize:6, color:'#556070' }}>{p.age}y · {fmt(p.value)}</div>
-                    </div>
-                    <span style={{ fontFamily:"var(--font-display)", fontSize:9, fontWeight:900, color:ovrColor(p.overall) }}>{p.overall}</span>
-                    <span style={{ fontFamily:"var(--font-display)", fontSize:7, fontWeight:700, color:posColor(p.position) }}>{p.position}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-          <DetailCard player={selScoutPlayer} accent={accent} budget={budget} mode="scout" onAction={handleBuy} onShortlist={toggleShortlist} shortlisted={shortlist.some(s=>s.id===selScoutPlayer?.id)} onClose={()=>setSelScoutPlayer(null)} />
-        </BentoBox>}
+        {(section === 'scout' || !section) && <ScoutSection
+          section={section} accent={accent} week={week} budget={budget} fmt={fmt}
+          resolvedMissions={resolvedMissions} activeMissions={activeMissions} completedMissions={completedMissions}
+          scoutRegion={scoutRegion} setScoutRegion={setScoutRegion}
+          scoutPos={scoutPos} setScoutPos={setScoutPos}
+          scoutDuration={scoutDuration} setScoutDuration={setScoutDuration}
+          sendScout={sendScout}
+          scoutScreen={scoutScreen} setScoutScreen={setScoutScreen}
+          activeScout={activeScout} setActiveScout={setActiveScout}
+          scoutReportSel={scoutReportSel} setScoutReportSel={setScoutReportSel}
+          scoutReportTab={scoutReportTab} setScoutReportTab={setScoutReportTab}
+          scoutDeepPlayer={scoutDeepPlayer} setScoutDeepPlayer={setScoutDeepPlayer}
+          shortlist={shortlist} toggleShortlist={toggleShortlist} handleBuy={handleBuy}
+        />}
 
         {/* ═══════════════════════════════
             BOX 4 — YOUTH (bottom middle)

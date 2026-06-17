@@ -6,11 +6,11 @@ import useGameStore from '../store/gameStore';
    CONSTANTS
 ───────────────────────────────────────── */
 const NAV = [
-  { to: '/home',         label: 'Home'      },
-  { to: '/club',         label: 'Club'      },
-  { to: '/transfers',    label: 'Transfers' },
-  { to: '/competitions', label: 'Compete'   },
-  { to: '/manager',      label: 'Manager'   },
+  { to: '/home',         label: 'Home'         },
+  { to: '/club',         label: 'Team'         },
+  { to: '/transfers',    label: 'Transfers'    },
+  { to: '/competitions', label: 'Competitions' },
+  { to: '/manager',      label: 'Manager'      },
 ];
 
 export const CLUB_COLOR = {
@@ -300,6 +300,9 @@ export default function Layout({ children }) {
         .g-tab {
           display: flex;
           align-items: center;
+          justify-content: center;
+          width: 140px;
+          flex-shrink: 0;
           padding: 0 24px;
           text-decoration: none;
           color: rgba(255,255,255,0.32);
@@ -325,13 +328,6 @@ export default function Layout({ children }) {
           color: rgba(255,255,255,0.9);
           border-bottom-color: rgba(255,255,255,0.6);
           background: rgba(255,255,255,0.03);
-        }
-        .g-tab.active::after {
-          content: '';
-          position: absolute;
-          bottom: 0; left: 24px; right: 24px;
-          height: 1px;
-          background: rgba(255,255,255,0.6);
         }
 
         /* ── Content ── */

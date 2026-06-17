@@ -3,7 +3,7 @@
    Three-step flow: Press Conference → Team Selection → Team Talk
    Props: fixture, squad, formation, onComplete(config), onCancel
 ═══════════════════════════════════════════════════════ */
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { TEAM_TALKS } from './matchEngine';
 import { PRE_MATCH_QUESTIONS, pickQuestions } from './conferenceQuestions';
 
@@ -18,24 +18,85 @@ const TACTICS_LIST = [
 
 const POSITIONS_ORDER = ['GK','RB','CB','CB','LB','CDM','CM','CM','RW','ST','LW'];
 
-const CLUB_BADGE_URL = {
-  'Manchester City':   'https://resources.premierleague.com/premierleague/badges/50/t43.png',
-  'Liverpool':         'https://resources.premierleague.com/premierleague/badges/50/t14.png',
-  'Arsenal':           'https://resources.premierleague.com/premierleague/badges/50/t3.png',
-  'Chelsea':           'https://resources.premierleague.com/premierleague/badges/50/t8.png',
-  'Manchester United': 'https://resources.premierleague.com/premierleague/badges/50/t1.png',
-  'Tottenham':         'https://resources.premierleague.com/premierleague/badges/50/t6.png',
-  'Aston Villa':       'https://resources.premierleague.com/premierleague/badges/50/t7.png',
-  'Brighton':          'https://resources.premierleague.com/premierleague/badges/50/t36.png',
+/* ─── Same club color/badge maps as Matchday.jsx, for consistency app-wide ─── */
+const CLUB_COLOR = {
+  'Real Madrid':'#FEBE10','Barcelona':'#A50044','Manchester City':'#6CABDD',
+  'Liverpool':'#C8102E','Arsenal':'#EF0107','Chelsea':'#034694',
+  'Manchester United':'#DA291C','Tottenham':'#132257','Bayern Munich':'#DC052D',
+  'PSG':'#003370','AC Milan':'#FB090B','Inter Milan':'#0068A8',
+  'Atletico Madrid':'#CB3524','Bayer Leverkusen':'#E32221',
+  'Brighton':'#0057B8','Aston Villa':'#670E36',
+  'Borussia Dortmund':'#FDE100','Juventus':'#555',
 };
 
-function ClubBadge({ name, size = 32 }) {
-  const url = CLUB_BADGE_URL[name];
-  if (url) return <img src={url} alt={name} style={{ width: size, height: size, objectFit: 'contain', flexShrink: 0 }} onError={e => e.target.style.display='none'} />;
+/* SVG-based badge URLs — clean renders, no cutout artefacts */
+const CLUB_BADGE = {
+  'Manchester City':
+    'https://upload.wikimedia.org/wikipedia/en/e/eb/Manchester_City_FC_badge.svg',
+  'Liverpool':
+    'https://upload.wikimedia.org/wikipedia/en/0/0c/Liverpool_FC.svg',
+  'Arsenal':
+    'https://upload.wikimedia.org/wikipedia/en/5/53/Arsenal_FC.svg',
+  'Chelsea':
+    'https://upload.wikimedia.org/wikipedia/en/c/cc/Chelsea_FC.svg',
+  'Manchester United':
+    'https://upload.wikimedia.org/wikipedia/en/7/7a/Manchester_United_FC_crest.svg',
+  'Tottenham':
+    'https://upload.wikimedia.org/wikipedia/en/b/b4/Tottenham_Hotspur.svg',
+  'Aston Villa':
+    'https://upload.wikimedia.org/wikipedia/en/9/9f/Aston_Villa_FC_new_crest.svg',
+  'Brighton':
+    'https://upload.wikimedia.org/wikipedia/en/f/fd/Brighton_%26_Hove_Albion_FC_logo.svg',
+  'Bayern Munich':
+    'https://upload.wikimedia.org/wikipedia/commons/1/1b/FC_Bayern_M%C3%BCnchen_logo_%282017%29.svg',
+  'Real Madrid':
+    'https://upload.wikimedia.org/wikipedia/en/5/56/Real_Madrid_CF.svg',
+  'Barcelona':
+    'https://upload.wikimedia.org/wikipedia/en/4/47/FC_Barcelona_%28crest%29.svg',
+  'PSG':
+    'https://upload.wikimedia.org/wikipedia/en/a/a7/Paris_Saint-Germain_F.C..svg',
+  'AC Milan':
+    'https://upload.wikimedia.org/wikipedia/commons/d/d0/Logo_of_AC_Milan.svg',
+  'Inter Milan':
+    'https://upload.wikimedia.org/wikipedia/commons/0/05/FC_Internazionale_Milano_2021.svg',
+  'Juventus':
+    'https://upload.wikimedia.org/wikipedia/commons/1/15/Juventus_FC_2017_icon_%28black%29.svg',
+  'Atletico Madrid':
+    'https://upload.wikimedia.org/wikipedia/en/f/f4/Atletico_Madrid_2017_logo.svg',
+  'Borussia Dortmund':
+    'https://upload.wikimedia.org/wikipedia/commons/6/67/Borussia_Dortmund_logo.svg',
+  'Bayer Leverkusen':
+    'https://upload.wikimedia.org/wikipedia/en/5/59/Bayer_04_Leverkusen_logo.svg',
+};
+
+function ClubBadge({ name, size = 32, faded = false }) {
+  const [failed, setFailed] = useState(false);
+  const url = CLUB_BADGE[name];
+  const color = CLUB_COLOR[name] || '#555';
+  const abbr = (name || '?').slice(0, 3).toUpperCase();
+  if (url && !failed) {
+    return (
+      <img
+        src={url}
+        alt={name}
+        onError={() => setFailed(true)}
+        style={{
+          width: size, height: size, objectFit: 'contain', flexShrink: 0,
+          opacity: faded ? 0.07 : 1,
+          filter: faded ? 'grayscale(0.3)' : 'none',
+        }}
+      />
+    );
+  }
   return (
-    <div style={{ width: size, height: size, borderRadius: 6, background: 'var(--bg-5)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontSize: size * 0.28, color: 'var(--text-muted)', flexShrink: 0 }}>
-      {name?.slice(0,3).toUpperCase()}
-    </div>
+    <div style={{
+      width: size, height: size, borderRadius: 5, flexShrink: 0,
+      background: `${color}22`, border: `1.5px solid ${color}55`,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      fontFamily: 'var(--font-display)', fontSize: size * 0.28,
+      color, letterSpacing: 0.5, fontWeight: 700,
+      opacity: faded ? 0.07 : 1,
+    }}>{abbr}</div>
   );
 }
 
@@ -57,97 +118,220 @@ function StepBar({ step, total = 3 }) {
 /* ════════════════════════════════════
    STEP 0 — PRESS CONFERENCE
 ════════════════════════════════════ */
-function PressConference({ fixture, onDone, onSkip }) {
+function PressConference({ fixture, onDone, onSkip, onBack }) {
   const questions = useMemo(() => pickQuestions(PRE_MATCH_QUESTIONS, 'any', 3), []);
-  const [qIdx, setQIdx]           = useState(0);
-  const [answered, setAnswered]   = useState(null); // { text, effect }
-  const [effects, setEffects]     = useState([]);   // accumulated
-  const [showEffect, setShowEffect] = useState(false);
+  const [qIdx, setQIdx]             = useState(0);
+  const [answered, setAnswered]     = useState(null); // { text, effect }
+  const [totals, setTotals]         = useState({ morale: 0, managerRating: 0 });
+  const [flash, setFlash]           = useState(null); // last effect, for the bar's brief pulse
 
   const current = questions[qIdx];
 
   const handleAnswer = (answer) => {
     setAnswered(answer);
-    setShowEffect(true);
-    setEffects(prev => [...prev, answer.effect]);
+    setFlash(answer.effect);
+    setTotals(prev => ({
+      morale: prev.morale + answer.effect.morale,
+      managerRating: prev.managerRating + answer.effect.managerRating,
+    }));
     setTimeout(() => {
-      setShowEffect(false);
+      setFlash(null);
       setAnswered(null);
       if (qIdx < questions.length - 1) {
         setQIdx(q => q + 1);
       } else {
-        const total = effects.concat(answer.effect).reduce(
-          (acc, e) => ({ morale: acc.morale + e.morale, managerRating: acc.managerRating + e.managerRating }),
-          { morale: 0, managerRating: 0 }
-        );
-        onDone(total);
+        onDone({
+          morale: totals.morale + answer.effect.morale,
+          managerRating: totals.managerRating + answer.effect.managerRating,
+        });
       }
     }, 1400);
   };
 
+  /* ─── Keyboard shortcuts: X = back, F = skip ─── */
+  useEffect(() => {
+    function onKey(e) {
+      const key = e.key.toLowerCase();
+      if (key === 'x' && onBack) onBack();
+      if (key === 'f') onSkip();
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onBack, onSkip]);
+
+  if (!current) return null;
+
+  const moraleColor = totals.morale > 4 ? 'var(--green)' : totals.morale < -4 ? 'var(--red)' : 'var(--yellow)';
+  const moralePct   = Math.min(100, Math.max(0, 50 + totals.morale * 4));
+
   return (
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '20px 16px 24px', gap: 20 }}>
-      {/* Journalist header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--bg-4)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
-            <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
-          </svg>
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', position: 'relative', overflow: 'hidden' }}>
+
+      {/* ── Home/away crest split background ── */}
+      <div style={{ position: 'absolute', inset: 0, display: 'flex', pointerEvents: 'none', zIndex: 0 }}>
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+          <ClubBadge name={fixture?.home} size={420} faded />
         </div>
-        <div>
-          <div style={{ fontFamily: 'var(--font-display)', fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>Press Conference</div>
-          <div style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-muted)', letterSpacing: 1.5, textTransform: 'uppercase' }}>Question {qIdx + 1} of {questions.length}</div>
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+          <ClubBadge name={fixture?.away} size={420} faded />
         </div>
-        <button onClick={onSkip} style={{ marginLeft: 'auto', background: 'none', border: '1px solid var(--border)', borderRadius: 6, padding: '5px 12px', fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-muted)', letterSpacing: 1.5, textTransform: 'uppercase', cursor: 'pointer', WebkitTapHighlightColor: 'transparent' }}>Skip</button>
+        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, var(--bg-0) 0%, rgba(0,0,0,0.55) 40%, rgba(0,0,0,0.55) 60%, var(--bg-0) 100%)' }} />
       </div>
 
-      {/* Question */}
-      <div style={{ background: 'var(--bg-3)', border: '1px solid var(--border)', borderRadius: 10, padding: '18px 16px' }}>
-        <div style={{ fontFamily: 'var(--font-body)', fontSize: 15, color: 'var(--text)', lineHeight: 1.65, fontStyle: 'italic' }}>
-          "{current.question}"
+      {/* ── Morale bar (persistent, top) ── */}
+      <div style={{ position: 'relative', zIndex: 1, padding: '14px 24px 0', flexShrink: 0 }}>
+        <div style={{ maxWidth: 920, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: 'var(--text-muted)', letterSpacing: 2.5, textTransform: 'uppercase', flexShrink: 0 }}>
+            Squad Morale
+          </span>
+          <div style={{ flex: 1, height: 6, borderRadius: 3, background: 'var(--bg-4)', border: '1px solid var(--border)', overflow: 'hidden', position: 'relative' }}>
+            <div style={{
+              position: 'absolute', left: '50%', top: 0, bottom: 0, width: 1, background: 'rgba(255,255,255,0.15)',
+            }} />
+            <div style={{
+              height: '100%', width: `${moralePct}%`, background: moraleColor,
+              transition: 'width 0.5s ease, background 0.3s ease',
+            }} />
+          </div>
+          <span style={{
+            fontFamily: 'var(--font-display)', fontSize: 12, fontWeight: 800, color: moraleColor,
+            width: 36, textAlign: 'right', flexShrink: 0, transition: 'color 0.3s ease',
+          }}>{totals.morale > 0 ? '+' : ''}{totals.morale}</span>
+
+          {/* Brief pulse label when an answer just landed */}
+          <span style={{
+            fontFamily: 'var(--font-mono)', fontSize: 8, letterSpacing: 1.5, textTransform: 'uppercase',
+            color: flash ? (flash.morale > 0 ? 'var(--green)' : flash.morale < -3 ? 'var(--red)' : 'var(--yellow)') : 'transparent',
+            transition: 'opacity 0.2s ease', opacity: flash ? 1 : 0, width: 90, flexShrink: 0,
+          }}>
+            {flash ? (flash.morale > 2 ? '+ Great' : flash.morale > 0 ? '+ Good' : flash.morale < -3 ? '− Backlash' : '~ Neutral') : ''}
+          </span>
         </div>
       </div>
 
-      {/* Effect flash */}
-      {showEffect && answered && (
+      {/* ── Main content, pushed further down the screen ── */}
+      <div style={{
+        position: 'relative', zIndex: 1, flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center',
+        justifyContent: 'center', padding: '20px 24px 32px', maxWidth: 920, width: '100%', margin: '0 auto', gap: 26,
+      }}>
+
+        {/* Room header — sponsor backdrop strip */}
         <div style={{
-          textAlign: 'center', padding: '10px',
-          fontFamily: 'var(--font-display)', fontSize: 14, fontWeight: 700, letterSpacing: 1,
-          color: answered.effect.morale > 0 ? 'var(--green)' : answered.effect.morale < -3 ? 'var(--red)' : 'var(--yellow)',
-          animation: 'effectPop 0.3s ease',
+          width: '100%', borderRadius: 10, overflow: 'hidden',
+          border: '1px solid var(--border)', background: 'var(--bg-3)',
         }}>
-          {answered.effect.morale > 2 ? '+ Squad Morale' : answered.effect.morale > 0 ? '+ Morale' : answered.effect.morale < -3 ? '- Morale Hit' : '~ Neutral'}
-          {answered.effect.managerRating !== 0 && (
-            <span style={{ marginLeft: 12, color: answered.effect.managerRating > 0 ? 'var(--green)' : 'var(--red)' }}>
-              {answered.effect.managerRating > 0 ? '+ Rating' : '- Rating'}
+          <div style={{
+            padding: '10px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            background: 'repeating-linear-gradient(115deg, var(--bg-4) 0px, var(--bg-4) 60px, var(--bg-5) 60px, var(--bg-5) 120px)',
+            borderBottom: '1px solid var(--border)',
+          }}>
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: 'rgba(255,255,255,0.55)', letterSpacing: 3, textTransform: 'uppercase' }}>
+              Pre-Match Press Conference
             </span>
-          )}
-        </div>
-      )}
+            <span style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: 'rgba(255,255,255,0.4)', letterSpacing: 2 }}>
+              {qIdx + 1} / {questions.length}
+            </span>
+          </div>
 
-      {/* Answers */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {current.answers.map((ans, i) => (
-          <button key={i} onClick={() => !answered && handleAnswer(ans)} style={{
-            background: answered === ans
-              ? (ans.effect.morale > 0 ? 'rgba(0,232,122,0.12)' : ans.effect.morale < -3 ? 'rgba(255,59,92,0.12)' : 'rgba(245,197,24,0.10)')
-              : 'var(--bg-3)',
-            border: `1px solid ${answered === ans
-              ? (ans.effect.morale > 0 ? 'rgba(0,232,122,0.4)' : ans.effect.morale < -3 ? 'rgba(255,59,92,0.4)' : 'rgba(245,197,24,0.4)')
-              : 'var(--border)'}`,
-            borderRadius: 8, padding: '13px 14px', textAlign: 'left',
-            fontFamily: 'var(--font-body)', fontSize: 13, color: 'var(--text-dim)',
-            lineHeight: 1.5, cursor: answered ? 'default' : 'pointer',
-            transition: 'all 0.2s', WebkitTapHighlightColor: 'transparent',
-            opacity: answered && answered !== ans ? 0.45 : 1,
-          }}
-            onMouseEnter={e => { if (!answered) e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)'; }}
-            onMouseLeave={e => { if (!answered) e.currentTarget.style.borderColor = 'var(--border)'; }}
-          >
-            {ans.text}
-          </button>
-        ))}
+          {/* Question progress dots */}
+          <div style={{ display: 'flex', gap: 6, padding: '12px 18px 0' }}>
+            {questions.map((_, i) => (
+              <div key={i} style={{
+                flex: 1, height: 3, borderRadius: 2,
+                background: i < qIdx ? 'var(--green)' : i === qIdx ? 'var(--text)' : 'var(--bg-5)',
+                transition: 'background 0.3s',
+              }} />
+            ))}
+          </div>
+
+          {/* Podium scene */}
+          <div style={{ padding: '28px 32px 24px', display: 'flex', alignItems: 'flex-start', gap: 20 }}>
+            {/* Journalist avatar */}
+            <div style={{
+              width: 52, height: 52, borderRadius: '50%', flexShrink: 0,
+              background: 'var(--bg-4)', border: '1px solid var(--border)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+              </svg>
+            </div>
+
+            {/* Speech card */}
+            <div style={{ flex: 1, position: 'relative' }}>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: 8, color: 'var(--text-muted)', letterSpacing: 2, textTransform: 'uppercase', marginBottom: 6 }}>
+                Sky Sports · Reporter
+              </div>
+              <div style={{
+                background: 'var(--bg-4)', border: '1px solid var(--border)', borderRadius: '4px 14px 14px 14px',
+                padding: '16px 20px', position: 'relative',
+              }}>
+                <div style={{ fontFamily: 'var(--font-body)', fontSize: 16, color: 'var(--text)', lineHeight: 1.6, fontStyle: 'italic' }}>
+                  "{current.question}"
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Answer options — desktop grid, your seat at the podium */}
+        <div style={{
+          width: '100%', display: 'grid',
+          gridTemplateColumns: current.answers.length > 2 ? 'repeat(2, 1fr)' : 'repeat(1, 1fr)',
+          gap: 12,
+        }}>
+          {current.answers.map((ans, i) => {
+            const isPicked  = answered === ans;
+            const tintColor = ans.effect.morale > 0 ? '#00e87a' : ans.effect.morale < -3 ? '#ff3b5c' : '#f5c518';
+            return (
+              <button key={i} onClick={() => !answered && handleAnswer(ans)} style={{
+                background: isPicked ? `${tintColor}14` : 'var(--bg-3)',
+                border: `1px solid ${isPicked ? `${tintColor}55` : 'var(--border)'}`,
+                borderRadius: 10, padding: '16px 18px', textAlign: 'left',
+                fontFamily: 'var(--font-body)', fontSize: 13.5, color: 'var(--text-dim)',
+                lineHeight: 1.55, cursor: answered ? 'default' : 'pointer',
+                transition: 'all 0.18s', WebkitTapHighlightColor: 'transparent',
+                opacity: answered && !isPicked ? 0.4 : 1,
+                display: 'flex', alignItems: 'flex-start', gap: 10,
+              }}
+                onMouseEnter={e => { if (!answered) { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.22)'; e.currentTarget.style.background = 'var(--bg-4)'; } }}
+                onMouseLeave={e => { if (!answered) { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.background = 'var(--bg-3)'; } }}
+              >
+                <span style={{
+                  flexShrink: 0, width: 20, height: 20, borderRadius: '50%',
+                  background: 'var(--bg-5)', border: '1px solid var(--border)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-muted)',
+                }}>{String.fromCharCode(65 + i)}</span>
+                <span style={{ flex: 1 }}>{ans.text}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ── Keyboard hint footer ── */}
+      <div style={{
+        position: 'relative', zIndex: 1, flexShrink: 0, padding: '0 24px 20px',
+        display: 'flex', justifyContent: 'center', gap: 24,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+          <kbd style={{
+            fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-muted)',
+            background: 'var(--bg-4)', border: '1px solid var(--border)', borderRadius: 4,
+            padding: '2px 7px', minWidth: 18, textAlign: 'center',
+          }}>X</kbd>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-muted)', letterSpacing: 1, textTransform: 'uppercase' }}>Go back</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+          <kbd style={{
+            fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-muted)',
+            background: 'var(--bg-4)', border: '1px solid var(--border)', borderRadius: 4,
+            padding: '2px 7px', minWidth: 18, textAlign: 'center',
+          }}>F</kbd>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 9, color: 'var(--text-muted)', letterSpacing: 1, textTransform: 'uppercase' }}>Skip conference</span>
+        </div>
       </div>
     </div>
   );
@@ -413,29 +597,24 @@ export default function PreMatch({ fixture, onComplete, onCancel }) {
   };
 
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 600, background: 'var(--bg-0)', display: 'flex', flexDirection: 'column', animation: 'slideUp 0.3s ease', overflowY: 'auto' }}>
+    <div style={{ position: 'fixed', inset: 0, zIndex: 600, background: 'var(--bg-0)', display: 'flex', flexDirection: 'column', animation: 'slideUp 0.3s ease', overflow: 'hidden' }}>
       <style>{`
         @keyframes slideUp { from { opacity:0; transform:translateY(24px) } to { opacity:1; transform:translateY(0) } }
         @keyframes effectPop { from { opacity:0; transform:scale(0.9) } to { opacity:1; transform:scale(1) } }
       `}</style>
 
-      {/* Header */}
-      <div style={{ padding: '14px 16px 0', display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
-        <button onClick={onCancel} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '4px', display: 'flex', alignItems: 'center', WebkitTapHighlightColor: 'transparent' }}>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-        </button>
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
-          <ClubBadge name={fixture?.home} size={26} />
-          <span style={{ fontFamily: 'var(--font-display)', fontSize: 12, color: 'var(--text-muted)', letterSpacing: 1 }}>VS</span>
-          <ClubBadge name={fixture?.away} size={26} />
-        </div>
-        <div style={{ width: 26 }} />
+      {/* Header — club identifier only, no close button (use X key to go back) */}
+      <div style={{ padding: '14px 16px 0', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, flexShrink: 0 }}>
+        <ClubBadge name={fixture?.home} size={26} />
+        <span style={{ fontFamily: 'var(--font-display)', fontSize: 12, color: 'var(--text-muted)', letterSpacing: 1 }}>VS</span>
+        <ClubBadge name={fixture?.away} size={26} />
       </div>
 
       <PressConference
         fixture={fixture}
         onDone={handleConferenceDone}
         onSkip={handleConferenceSkip}
+        onBack={onCancel}
       />
     </div>
   );
