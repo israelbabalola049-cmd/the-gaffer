@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import useGameStore from '../store/gameStore';
 
@@ -111,6 +111,25 @@ export default function Layout({ children }) {
       navigate('/');
     }
   };
+
+  // Track the ACTUAL visible viewport height (accounts for mobile browser
+  // chrome — address bar, toolbars — that vh/dvh alone don't reliably reflect,
+  // especially mid-rotation on iOS Safari).
+  useEffect(() => {
+    const setAppHeight = () => {
+      const h = window.visualViewport?.height || window.innerHeight;
+      document.documentElement.style.setProperty('--app-height', `${h}px`);
+    };
+    setAppHeight();
+    window.addEventListener('resize', setAppHeight);
+    window.addEventListener('orientationchange', setAppHeight);
+    window.visualViewport?.addEventListener('resize', setAppHeight);
+    return () => {
+      window.removeEventListener('resize', setAppHeight);
+      window.removeEventListener('orientationchange', setAppHeight);
+      window.visualViewport?.removeEventListener('resize', setAppHeight);
+    };
+  }, []);
 
   return (
     <>
@@ -255,14 +274,16 @@ export default function Layout({ children }) {
           display: flex;
           align-items: center;
           justify-content: center;
-          padding-top: 64px;
-          padding-bottom: 40px;
+          padding-top: max(64px, env(safe-area-inset-top));
+          padding-bottom: max(40px, env(safe-area-inset-bottom));
+          padding-left: env(safe-area-inset-left);
+          padding-right: env(safe-area-inset-right);
         }
 
         /* ── The box — wide landscape rectangle ── */
         .g-box {
           width: min(1200px, calc(100% - 120px));
-          height: min(580px, calc(100vh - 130px));
+          height: min(580px, calc(var(--app-height, 100vh) - 130px));
           display: flex;
           flex-direction: column;
           border-radius: 0;
@@ -334,7 +355,8 @@ export default function Layout({ children }) {
         .g-content {
           flex: 1;
           min-height: 0;
-          overflow: hidden;
+          overflow-y: auto;
+          overflow-x: hidden;
           background: var(--bg-2);
         }
         .g-content::-webkit-scrollbar { width: 3px; }
@@ -349,6 +371,24 @@ export default function Layout({ children }) {
         @keyframes gPageIn {
           from { opacity: 0; transform: translateY(5px); }
           to   { opacity: 1; transform: translateY(0); }
+        }
+
+        /* ── Mobile in landscape: very limited height, reclaim chrome space ── */
+        @media (max-height: 500px) {
+          .g-topbar { height: 40px; }
+          .g-shell {
+            padding-top: max(48px, env(safe-area-inset-top));
+            padding-bottom: max(10px, env(safe-area-inset-bottom));
+          }
+          .g-box { height: calc(var(--app-height, 100vh) - 58px); }
+          .g-tabs { height: 32px; }
+          .g-tab {
+            width: auto;
+            padding: 0 14px;
+            font-size: 10px;
+            letter-spacing: 2px;
+          }
+          .g-page { padding: 12px; }
         }
 
         /* ── Shared utility classes for child pages ── */

@@ -117,6 +117,8 @@ const useGameStore = create(
       squad: [],
       starting11: [],
       formation: '4-3-3',
+      teamSheets: [],
+      activeTeamSheetId: null,
       budget: 0,
       season: 1,
       week: 1,
@@ -158,10 +160,20 @@ const useGameStore = create(
         const morale       = {};
         squadPlayers.forEach(p => { morale[p.id] = 70; });
 
+        const defaultSheetId = `ts-${Date.now()}`;
+        const teamSheets = [{
+          id: defaultSheetId,
+          name: 'Default',
+          formation: '4-3-3',
+          mentality: 'Balanced',
+          createdAt: Date.now(),
+        }];
+
         set({
           myClub: club, budget: club.budget, squad: squadPlayers,
           starting11: [], results: [], season: 1, week: 1,
           fixtures, currentFixtureIndex: 0, leagueTable,
+          teamSheets, activeTeamSheetId: defaultSheetId,
           notifications: [{
             id: Date.now(), type: 'board', title: 'Welcome, Gaffer',
             message: 'The board has set their expectations for the season. Check your objectives and make them proud.',
@@ -178,6 +190,46 @@ const useGameStore = create(
       setFormation:  (formation) => set({ formation }),
       addResult:     (result) => set(state => ({ results: [...state.results, result] })),
       advanceWeek:   () => set(state => ({ week: state.week + 1 })),
+
+      /* ── Team Sheets ── */
+      addTeamSheet: (sheet) =>
+        set(state => {
+          const id = `ts-${Date.now()}`;
+          const newSheet = {
+            id,
+            name: sheet.name || 'New Sheet',
+            formation: sheet.formation || state.formation || '4-3-3',
+            mentality: sheet.mentality || 'Balanced',
+            createdAt: Date.now(),
+          };
+          return { teamSheets: [...state.teamSheets, newSheet] };
+        }),
+
+      updateTeamSheet: (id, updates) =>
+        set(state => ({
+          teamSheets: state.teamSheets.map(s => s.id === id ? { ...s, ...updates } : s),
+        })),
+
+      deleteTeamSheet: (id) =>
+        set(state => {
+          const teamSheets = state.teamSheets.filter(s => s.id !== id);
+          const activeTeamSheetId = state.activeTeamSheetId === id
+            ? (teamSheets[0]?.id || null)
+            : state.activeTeamSheetId;
+          const activeSheet = teamSheets.find(s => s.id === activeTeamSheetId);
+          return {
+            teamSheets,
+            activeTeamSheetId,
+            formation: activeSheet ? activeSheet.formation : state.formation,
+          };
+        }),
+
+      setActiveTeamSheet: (id) =>
+        set(state => {
+          const sheet = state.teamSheets.find(s => s.id === id);
+          if (!sheet) return { activeTeamSheetId: id };
+          return { activeTeamSheetId: id, formation: sheet.formation };
+        }),
 
       buyPlayer: (player, fee) =>
         set(state => {
@@ -337,6 +389,7 @@ const useGameStore = create(
       resetGame: () =>
         set({
           myClub: null, squad: [], starting11: [], formation: '4-3-3',
+          teamSheets: [], activeTeamSheetId: null,
           budget: 0, season: 1, week: 1, results: [],
           allPlayers: playersData.players,
           managerProfile: null,
@@ -354,6 +407,8 @@ const useGameStore = create(
         squad:               state.squad,
         starting11:          state.starting11,
         formation:           state.formation,
+        teamSheets:          state.teamSheets,
+        activeTeamSheetId:   state.activeTeamSheetId,
         budget:              state.budget,
         season:              state.season,
         week:                state.week,

@@ -1217,9 +1217,21 @@ export default function Matchday() {
   } = store;
   const navigate = useNavigate();
 
+  /* ─── Decide the initial screen synchronously (no flash of the hub
+     before the conference shows) by replicating the isMatchday check
+     inline, since fixtures/week are already available from the store
+     at mount time — no need to wait for an effect. ─── */
+  const initialFixtures = useMemo(() => {
+    if (!myClub) return [];
+    return (store.fixtures || []).map(f => ({ ...f, isHome: f.home === myClub.name, day: f.week }));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const initialUpcoming = useMemo(() => initialFixtures.filter(f => !f.played), [initialFixtures]);
+  const initialNext     = initialUpcoming.find(f => f.week === week) || initialUpcoming[0] || null;
+  const initialIsMatchday = !!(initialNext && initialNext.week === week);
+
   const [tab, setTab]                     = useState('preview');
-  const [screen, setScreen]               = useState('calendar');
-  const [activeFixture, setActiveFixture] = useState(null);
+  const [screen, setScreen]               = useState(initialIsMatchday ? 'prematch' : 'calendar');
+  const [activeFixture, setActiveFixture] = useState(initialIsMatchday ? initialNext : null);
   const [confDone, setConfDone]           = useState(false);
   const [confBonus, setConfBonus]         = useState({ morale: 0, managerRating: 0 });
 
@@ -1556,62 +1568,76 @@ export default function Matchday() {
           {/* ── Clubs + H2H ── */}
           <div style={{
             flex:1, display:'flex', alignItems:'center', justifyContent:'center',
-            padding:'0 60px', gap:48,
+            padding:'0 60px', gap:40,
             animation:'fadeUp 0.45s 0.08s ease both',
           }}>
 
             {/* My club */}
-            <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:12 }}>
+            <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:14, position:'relative' }}>
+              {/* Soft club-colour glow behind badge */}
+              <div style={{
+                position:'absolute', top:30, width:220, height:220, borderRadius:'50%',
+                background:`radial-gradient(circle, ${myColor}22 0%, transparent 70%)`,
+                pointerEvents:'none',
+              }} />
+
               {/* You indicator */}
-              <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:2 }}>
-                <svg width="10" height="8" viewBox="0 0 10 8">
+              <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:2, position:'relative', zIndex:1 }}>
+                <svg width="9" height="7" viewBox="0 0 10 8">
                   <polygon points="5,0 10,8 0,8" fill={myColor} />
                 </svg>
-                <span style={{ fontFamily:"'Share Tech Mono',monospace", fontSize:8, letterSpacing:3, color:myColor, textTransform:'uppercase' }}>You</span>
+                <span style={{ fontFamily:"'Share Tech Mono',monospace", fontSize:8, letterSpacing:3.5, color:myColor, textTransform:'uppercase' }}>You</span>
               </div>
-              <ClubBadge name={myClub?.name} size={108} />
-              <div style={{ textAlign:'center' }}>
-                <div style={{ fontFamily:"'Barlow Condensed',sans-serif", fontSize:26, fontWeight:900, letterSpacing:1, color:'#fff', textTransform:'uppercase', lineHeight:1 }}>
+              <div style={{ position:'relative', zIndex:1, filter:`drop-shadow(0 8px 24px ${myColor}33)` }}>
+                <ClubBadge name={myClub?.name} size={104} />
+              </div>
+              <div style={{ textAlign:'center', position:'relative', zIndex:1 }}>
+                <div style={{ fontFamily:"'Barlow Condensed',sans-serif", fontSize:25, fontWeight:800, letterSpacing:0.5, color:'#fff', textTransform:'uppercase', lineHeight:1.05 }}>
                   {myClub?.name}
                 </div>
                 <div style={{
-                  fontFamily:"'Barlow Condensed',sans-serif", fontSize:32, fontWeight:900,
-                  letterSpacing:6, color:'rgba(255,255,255,0.06)', textTransform:'uppercase',
-                  lineHeight:1, marginTop:2,
+                  fontFamily:"'Share Tech Mono',monospace", fontSize:9, letterSpacing:4,
+                  color:'rgba(255,255,255,0.22)', textTransform:'uppercase', marginTop:6,
                 }}>
                   {nextFixture.isHome ? 'Home' : 'Away'}
                 </div>
               </div>
               {myForm.length > 0 && (
-                <div style={{ display:'flex', gap:5 }}>
+                <div style={{ display:'flex', gap:9, position:'relative', zIndex:1 }}>
                   {myForm.slice(0,5).map((r,i)=>{
                     const c = r==='W'?'#00e87a':r==='D'?'#f5c518':'#ff3b5c';
-                    return <div key={i} style={{ width:24,height:24,background:`${c}14`,border:`1px solid ${c}44`,display:'flex',alignItems:'center',justifyContent:'center',fontFamily:"'Barlow Condensed',sans-serif",fontSize:11,fontWeight:900,color:c }}>{r}</div>;
+                    return <span key={i} style={{ fontFamily:"'Barlow Condensed',sans-serif", fontSize:14, fontWeight:800, color:c, opacity: 0.45 + (i/myForm.slice(0,5).length)*0.55 }}>{r}</span>;
                   })}
                 </div>
               )}
             </div>
 
-            {/* Centre — VS on top, then H2H stats, then button */}
-            <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:20, minWidth:210 }}>
+            {/* Centre — glass panel: VS, H2H stats, Start Match */}
+            <div style={{
+              display:'flex', flexDirection:'column', alignItems:'center', gap:22,
+              width:240, padding:'28px 26px', borderRadius:14,
+              background:'rgba(255,255,255,0.025)',
+              border:'1px solid rgba(255,255,255,0.07)',
+              backdropFilter:'blur(6px)',
+            }}>
               <span style={{
-                fontFamily:"'Barlow Condensed',sans-serif", fontSize:52, fontWeight:900,
-                color:'rgba(255,255,255,0.1)', letterSpacing:10, lineHeight:1,
+                fontFamily:"'Barlow Condensed',sans-serif", fontSize:34, fontWeight:800,
+                color:'rgba(255,255,255,0.14)', letterSpacing:9, lineHeight:1,
               }}>VS</span>
 
               {/* H2H stat bars */}
-              <div style={{ width:'100%', display:'flex', flexDirection:'column', gap:12 }}>
+              <div style={{ width:'100%', display:'flex', flexDirection:'column', gap:14 }}>
                 {[['ATT', myRating+2, oppRatingVal-2], ['MID', myRating, oppRatingVal], ['DEF', myRating-2, oppRatingVal+2]].map(([lbl,mv,ov])=>{
                   const pct = Math.round(((mv)/(mv+ov||1))*100);
                   return (
                     <div key={lbl}>
-                      <div style={{ display:'flex', justifyContent:'space-between', marginBottom:5 }}>
-                        <span style={{ fontFamily:"'Barlow Condensed',sans-serif", fontSize:20, fontWeight:900, color:myColor }}>{mv}</span>
-                        <span style={{ fontFamily:"'Share Tech Mono',monospace", fontSize:9, color:'rgba(255,255,255,0.28)', letterSpacing:3, alignSelf:'center' }}>{lbl}</span>
-                        <span style={{ fontFamily:"'Barlow Condensed',sans-serif", fontSize:20, fontWeight:900, color:'rgba(255,255,255,0.38)' }}>{ov}</span>
+                      <div style={{ display:'flex', justifyContent:'space-between', marginBottom:6 }}>
+                        <span style={{ fontFamily:"'Barlow Condensed',sans-serif", fontSize:18, fontWeight:800, color:myColor }}>{mv}</span>
+                        <span style={{ fontFamily:"'Share Tech Mono',monospace", fontSize:8, color:'rgba(255,255,255,0.25)', letterSpacing:3, alignSelf:'center' }}>{lbl}</span>
+                        <span style={{ fontFamily:"'Barlow Condensed',sans-serif", fontSize:18, fontWeight:800, color:'rgba(255,255,255,0.34)' }}>{ov}</span>
                       </div>
-                      <div style={{ height:4, background:'rgba(255,255,255,0.07)', overflow:'hidden' }}>
-                        <div style={{ width:`${pct}%`, height:'100%', background:myColor }} />
+                      <div style={{ height:3, borderRadius:2, background:'rgba(255,255,255,0.06)', overflow:'hidden' }}>
+                        <div style={{ width:`${pct}%`, height:'100%', borderRadius:2, background:myColor, boxShadow:`0 0 8px ${myColor}66` }} />
                       </div>
                     </div>
                   );
@@ -1622,37 +1648,46 @@ export default function Matchday() {
               <button
                 onClick={handlePlayFromPreview}
                 style={{
-                  width:'100%', padding:'15px 0', border:'none', cursor:'pointer',
+                  width:'100%', padding:'14px 0', border:'none', cursor:'pointer',
                   background:`linear-gradient(90deg, ${comp.accent} 0%, ${myColor} 50%, ${comp.accent} 100%)`,
                   backgroundSize:'200% auto',
                   animation:'shine 3s linear infinite',
                   color:'#000', fontFamily:"'Barlow Condensed',sans-serif",
-                  fontSize:15, fontWeight:900, letterSpacing:4, textTransform:'uppercase',
-                  borderRadius:4,
-                  boxShadow:`0 2px 20px ${comp.accent}40`,
+                  fontSize:14, fontWeight:800, letterSpacing:3.5, textTransform:'uppercase',
+                  borderRadius:6,
+                  boxShadow:`0 4px 18px ${comp.accent}35`,
+                  transition:'transform 0.15s ease, box-shadow 0.15s ease',
                 }}
+                onMouseEnter={e=>{ e.currentTarget.style.transform='translateY(-1px)'; e.currentTarget.style.boxShadow=`0 6px 22px ${comp.accent}50`; }}
+                onMouseLeave={e=>{ e.currentTarget.style.transform='none'; e.currentTarget.style.boxShadow=`0 4px 18px ${comp.accent}35`; }}
               >
                 ▶ Start Match
               </button>
             </div>
 
             {/* Opponent */}
-            <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:12 }}>
-              <div style={{ height:22 }} />
-              <ClubBadge name={oppName} size={108} />
-              <div style={{ textAlign:'center' }}>
-                <div style={{ fontFamily:"'Barlow Condensed',sans-serif", fontSize:26, fontWeight:900, letterSpacing:1, color:'#fff', textTransform:'uppercase', lineHeight:1 }}>
+            <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', gap:14, position:'relative' }}>
+              <div style={{
+                position:'absolute', top:30, width:220, height:220, borderRadius:'50%',
+                background:'radial-gradient(circle, rgba(255,255,255,0.06) 0%, transparent 70%)',
+                pointerEvents:'none',
+              }} />
+              <div style={{ height:21, position:'relative', zIndex:1 }} />
+              <div style={{ position:'relative', zIndex:1, filter:'drop-shadow(0 8px 24px rgba(0,0,0,0.4))' }}>
+                <ClubBadge name={oppName} size={104} />
+              </div>
+              <div style={{ textAlign:'center', position:'relative', zIndex:1 }}>
+                <div style={{ fontFamily:"'Barlow Condensed',sans-serif", fontSize:25, fontWeight:800, letterSpacing:0.5, color:'#fff', textTransform:'uppercase', lineHeight:1.05 }}>
                   {oppName}
                 </div>
                 <div style={{
-                  fontFamily:"'Barlow Condensed',sans-serif", fontSize:32, fontWeight:900,
-                  letterSpacing:6, color:'rgba(255,255,255,0.06)', textTransform:'uppercase',
-                  lineHeight:1, marginTop:2,
+                  fontFamily:"'Share Tech Mono',monospace", fontSize:9, letterSpacing:4,
+                  color:'rgba(255,255,255,0.22)', textTransform:'uppercase', marginTop:6,
                 }}>
                   {nextFixture.isHome ? 'Away' : 'Home'}
                 </div>
               </div>
-              <div style={{ fontFamily:"'Share Tech Mono',monospace", fontSize:10, color:'rgba(255,255,255,0.28)', letterSpacing:2 }}>
+              <div style={{ fontFamily:"'Share Tech Mono',monospace", fontSize:9, color:'rgba(255,255,255,0.26)', letterSpacing:2.5, position:'relative', zIndex:1 }}>
                 OVR {oppRatingVal}
               </div>
             </div>
@@ -1660,12 +1695,13 @@ export default function Matchday() {
 
           {/* Bottom form strip */}
           {recentResults.length > 0 && (
-            <div style={{ borderTop:'1px solid rgba(255,255,255,0.05)', padding:'12px 60px', display:'flex', gap:8, alignItems:'center', animation:'fadeUp 0.5s 0.15s ease both' }}>
-              <span style={{ fontFamily:"'Share Tech Mono',monospace", fontSize:7, color:'rgba(255,255,255,0.18)', letterSpacing:2, textTransform:'uppercase', marginRight:8 }}>Last {recentResults.length}</span>
+            <div style={{ borderTop:'1px solid rgba(255,255,255,0.05)', padding:'12px 60px', display:'flex', gap:20, alignItems:'center', animation:'fadeUp 0.5s 0.15s ease both' }}>
+              <span style={{ fontFamily:"'Share Tech Mono',monospace", fontSize:7, color:'rgba(255,255,255,0.18)', letterSpacing:2, textTransform:'uppercase' }}>Last {recentResults.length}</span>
               {myForm.slice(0,5).map((r,i)=>{
                 const c = r==='W'?'#00e87a':r==='D'?'#f5c518':'#ff3b5c';
-                return <div key={i} style={{ padding:'3px 12px', border:`1px solid ${c}2a`, background:`${c}0a`, fontFamily:"'Barlow Condensed',sans-serif", fontSize:12, fontWeight:900, color:c, display:'flex', alignItems:'center', gap:6 }}>
-                  <span>{r}</span><span style={{ color:'rgba(255,255,255,0.35)', fontSize:10 }}>{recentResults[i]?.myGoals}–{recentResults[i]?.oppGoals}</span>
+                return <div key={i} style={{ display:'flex', alignItems:'baseline', gap:6 }}>
+                  <span style={{ fontFamily:"'Barlow Condensed',sans-serif", fontSize:14, fontWeight:900, color:c }}>{r}</span>
+                  <span style={{ color:'rgba(255,255,255,0.3)', fontSize:10, fontFamily:"'Share Tech Mono',monospace" }}>{recentResults[i]?.myGoals}–{recentResults[i]?.oppGoals}</span>
                 </div>;
               })}
             </div>

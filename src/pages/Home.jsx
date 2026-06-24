@@ -601,6 +601,7 @@ export default function Home() {
   const [headlineIdx, setHeadlineIdx]       = useState(0);
   const [headlineVisible, setHeadlineVisible] = useState(true);
   const [isPortrait, setIsPortrait]         = useState(false);
+  const [viewportHeight, setViewportHeight] = useState(null);
 
   /* Loader */
   useEffect(() => {
@@ -625,18 +626,24 @@ export default function Home() {
     return () => clearInterval(t);
   }, [loaded]);
 
-  /* Portrait detection */
+  /* Portrait detection + real visible viewport height
+     (vh/dvh alone don't reliably reflect mobile browser chrome —
+     address bar, toolbars — especially mid-rotation on iOS Safari) */
   useEffect(() => {
     const check = () => {
       const portrait = window.innerHeight > window.innerWidth;
       setIsPortrait(portrait);
+      const h = window.visualViewport?.height || window.innerHeight;
+      setViewportHeight(h);
     };
     check();
     window.addEventListener('resize', check);
     window.addEventListener('orientationchange', check);
+    window.visualViewport?.addEventListener('resize', check);
     return () => {
       window.removeEventListener('resize', check);
       window.removeEventListener('orientationchange', check);
+      window.visualViewport?.removeEventListener('resize', check);
     };
   }, []);
 
@@ -804,25 +811,29 @@ export default function Home() {
         <div style={{ position:'absolute', inset:0, background:'linear-gradient(to top, rgba(4,6,10,0.98) 0%, rgba(4,6,10,0.4) 30%, transparent 60%)' }}/>
       </div>
 
-      {/* Hero — full viewport, no scroll */}
+      {/* Hero — sized to the REAL visible viewport (accounts for mobile browser
+          chrome), scrolls as a fallback if anything still doesn't fit */}
       <div style={{
         position:'relative', zIndex:1,
-        width:'100vw', height:'100dvh',
+        width:'100vw', height: viewportHeight ? `${viewportHeight}px` : '100dvh',
         display:'flex', flexDirection:'column',
         opacity: loaded ? 1 : 0, transition:'opacity 0.5s ease',
-        overflow:'hidden',
+        overflowY:'auto', overflowX:'hidden',
       }}>
         {/* Main content — fills remaining space */}
         <div style={{
           flex:1, display:'flex', flexDirection:'column', justifyContent:'center',
-          padding:'clamp(24px,5vh,60px) clamp(24px,8vw,80px) clamp(16px,3vh,32px)',
+          paddingTop:'clamp(24px,5vh,60px)',
+          paddingBottom:'clamp(16px,3vh,32px)',
+          paddingLeft:'max(clamp(24px,8vw,80px), env(safe-area-inset-left))',
+          paddingRight:'max(clamp(24px,8vw,80px), env(safe-area-inset-right))',
         }}>
           <div style={{ maxWidth:620 }}>
             <h1 className="hero-h1" style={{
               fontFamily:'var(--font-display)', fontWeight:900,
-              fontSize:'clamp(38px,9vw,100px)',
+              fontSize:'clamp(26px, min(8vw, 11vh), 100px)',
               letterSpacing:'clamp(1px,0.3vw,3px)', lineHeight:0.88,
-              color:'#fff', marginBottom:'clamp(14px,3vh,28px)', textTransform:'uppercase',
+              color:'#fff', marginBottom:'clamp(10px,3vh,28px)', textTransform:'uppercase',
               transition:'opacity 0.4s ease, transform 0.4s ease',
               opacity: headlineVisible ? 1 : 0,
               transform: headlineVisible ? 'translateY(0)' : 'translateY(8px)',
@@ -839,7 +850,7 @@ export default function Home() {
             <p className="hero-sub" style={{
               fontSize:'clamp(12px,2vw,15px)', color:'rgba(255,255,255,0.45)',
               lineHeight:1.7, fontWeight:300, maxWidth:380, margin:0,
-              marginBottom:'clamp(18px,3vh,36px)',
+              marginBottom:'clamp(10px,3vh,36px)',
             }}>
               Build a dynasty. Dominate the league. Prove you've got what it takes.
             </p>
@@ -859,14 +870,17 @@ export default function Home() {
         {/* Stats strip — pinned to bottom */}
         <div className="hero-stats" style={{
           display:'flex', gap:'clamp(20px,5vw,64px)',
-          padding:'clamp(14px,2.5vh,24px) clamp(24px,8vw,80px)',
+          paddingTop:'clamp(8px,2vh,24px)',
+          paddingBottom:'clamp(8px,2vh,24px)',
+          paddingLeft:'max(clamp(24px,8vw,80px), env(safe-area-inset-left))',
+          paddingRight:'max(clamp(24px,8vw,80px), env(safe-area-inset-right))',
           borderTop:'1px solid rgba(255,255,255,0.06)',
           background:'rgba(4,6,10,0.6)', backdropFilter:'blur(8px)',
           flexShrink:0,
         }}>
           {[['18','Top Clubs'],['6','Leagues'],['100+','Real Players']].map(([val,label])=>(
             <div key={label}>
-              <div style={{ fontFamily:'var(--font-display)', fontSize:'clamp(20px,4vw,30px)', color:'#4ade80', lineHeight:1 }}>{val}</div>
+              <div style={{ fontFamily:'var(--font-display)', fontSize:'clamp(16px, min(4vw, 4.5vh), 30px)', color:'#4ade80', lineHeight:1 }}>{val}</div>
               <div style={{ fontFamily:'var(--font-mono)', fontSize:'clamp(8px,1.2vw,10px)', color:'rgba(255,255,255,0.3)', letterSpacing:'1.5px', textTransform:'uppercase', marginTop:4 }}>{label}</div>
             </div>
           ))}

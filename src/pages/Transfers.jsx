@@ -323,7 +323,7 @@ function SearchSection({ section, allPlayers, accent, shortlist, budget, handleB
                     <div style={{ position:'absolute', right:-10, top:-14, fontFamily:"var(--font-display)", fontSize:120, fontWeight:900, color:'rgba(255,255,255,0.03)', lineHeight:1, userSelect:'none' }}>{sfSelPlayer.overall}</div>
                     <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:8 }}>
                       <span style={{ fontFamily:"var(--font-mono)", fontSize:8, color:'#556070' }}>{sfSelPlayer.club}</span>
-                      <img src={`https://flagcdn.com/w20/${nationalityToCode(sfSelPlayer.nationality)}.png`} alt="" style={{ height:11, borderRadius:1, marginLeft:'auto' }} onError={e=>e.target.style.display='none'} />
+                      <img src={`https://flagcdn.com/w20/${natCode(sfSelPlayer.nationality)}.png`} alt="" style={{ height:11, borderRadius:1, marginLeft:'auto' }} onError={e=>e.target.style.display='none'} />
                       <span style={{ fontFamily:"var(--font-display)", fontSize:9, fontWeight:700, fontStyle:'italic', color:posColor(sfSelPlayer.position) }}>{sfSelPlayer.position}</span>
                     </div>
                     <div style={{ display:'flex', alignItems:'flex-end', justifyContent:'space-between' }}>
@@ -446,115 +446,256 @@ function ScoutSection({
   const BG = 'rgba(255,255,255,0.03)';
   const BORDER = '1px solid rgba(255,255,255,0.08)';
 
+  /* ── Scout deploy modal state ── */
+  const [showDeployModal, setShowDeployModal] = React.useState(false);
+  const [deploySlot,      setDeploySlot]      = React.useState(null);
+  const [modalRegion,     setModalRegion]      = React.useState('Europe');
+  const [modalPos,        setModalPos]         = React.useState('Any');
+  const [modalDuration,   setModalDuration]    = React.useState(SCOUT_DURATIONS[1]);
+  const [hoveredSlot,     setHoveredSlot]      = React.useState(null);
+
+  // Sidebar shows the hovered or clicked scout's data
+  const sidebarIdx  = hoveredSlot !== null ? hoveredSlot : activeScout;
+  const sidebarSlot = sidebarIdx !== null ? slots[sidebarIdx] : null;
+  const sidebarMission = sidebarSlot?.mission;
+  const sidebarFound  = sidebarMission?.done ? sidebarMission.results : [];
+  const sidebarBreakdown = {
+    Strikers:    sidebarFound.filter(p=>['ST','CF','FWD'].includes(p.position)).length,
+    Midfielders: sidebarFound.filter(p=>['CM','CAM','CDM','LM','RM','DM','AM'].includes(p.position)).length,
+    Defenders:   sidebarFound.filter(p=>['CB','LB','RB','LWB','RWB'].includes(p.position)).length,
+    Goalkeepers: sidebarFound.filter(p=>p.position==='GK').length,
+  };
+  const sidebarTotal = sidebarFound.length;
+
+  const handleDeploy = () => {
+    setScoutRegion(modalRegion);
+    setScoutPos(modalPos);
+    setScoutDuration(modalDuration);
+    sendScout();
+    setShowDeployModal(false);
+  };
+
   /* ── Screen: HUB ── */
   if (scoutScreen === 'hub') return (
-    <BentoBox style={{ gridColumn: section?'1':'3', gridRow: section?'1':'1/3', padding:0, display:'flex', flexDirection:'column', overflow:'hidden' }}>
-      {/* Header breadcrumb */}
-      <div style={{ padding:'8px 14px', borderBottom:'1px solid rgba(255,255,255,0.07)', display:'flex', alignItems:'center', gap:6, flexShrink:0 }}>
+    <BentoBox style={{ gridColumn: section?'1':'3', gridRow: section?'1':'1/3', padding:0, display:'flex', flexDirection:'column', overflow:'hidden', position:'relative' }}>
+
+      {/* BG image */}
+      <div style={{ position:'absolute', inset:0, backgroundImage:"url('https://images.unsplash.com/photo-1524015368236-bbf6f72545b6?auto=format&fit=crop&w=900&q=60')", backgroundSize:'cover', backgroundPosition:'center', opacity:0.08, pointerEvents:'none' }} />
+      <div style={{ position:'absolute', inset:0, background:'linear-gradient(180deg, rgba(6,8,9,0.3) 0%, rgba(6,8,9,0.85) 100%)', pointerEvents:'none' }} />
+
+      {/* Header */}
+      <div style={{ position:'relative', padding:'10px 16px', borderBottom:'1px solid rgba(255,255,255,0.07)', display:'flex', alignItems:'center', gap:6, flexShrink:0 }}>
         <span style={{ fontFamily:"var(--font-mono)", fontSize:8, color:'#556070', letterSpacing:2, textTransform:'uppercase' }}>Transfers</span>
         <span style={{ color:'#3b4555' }}>›</span>
         <span style={{ fontFamily:"var(--font-mono)", fontSize:8, color:accent, letterSpacing:2, textTransform:'uppercase' }}>Scouting Network</span>
       </div>
 
-      <div style={{ flex:1, display:'flex', overflow:'hidden' }}>
+      <div style={{ position:'relative', flex:1, display:'flex', overflow:'hidden' }}>
 
-        {/* Left — 6 scout slots */}
-        <div style={{ flex:1, padding:10, display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gridTemplateRows:'1fr 1fr', gap:8, overflow:'hidden' }}>
-          {slots.map((s, i) => (
-            <div key={i}
-              onClick={()=>{ setActiveScout(i); setScoutScreen('report'); setScoutReportSel(null); setScoutReportTab('ALL'); }}
-              style={{
-                background: activeScout===i ? `${accent}18` : s.done ? 'rgba(0,232,122,0.06)' : s.active ? 'rgba(245,197,24,0.06)' : BG,
-                border: `1px solid ${activeScout===i ? accent : s.done ? 'rgba(0,232,122,0.2)' : s.active ? 'rgba(245,197,24,0.2)' : 'rgba(255,255,255,0.08)'}`,
-                borderRadius:2, padding:'10px 10px', cursor:'pointer',
-                display:'flex', flexDirection:'column', gap:6,
-                transition:'all 0.12s', position:'relative', overflow:'hidden',
-              }}
-              onMouseEnter={e=>{ e.currentTarget.style.background = s.done?'rgba(0,232,122,0.1)':'rgba(255,255,255,0.05)'; }}
-              onMouseLeave={e=>{ e.currentTarget.style.background = s.done?'rgba(0,232,122,0.06)':s.active?'rgba(245,197,24,0.06)':BG; }}
-            >
-              {/* Status dot */}
-              <div style={{ position:'absolute', top:8, right:8 }}>
-                {s.active && <div style={{ width:7, height:7, borderRadius:'50%', background:'#f5c518', animation:'scoutPulse 1.5s infinite' }} />}
-                {s.done  && <div style={{ width:7, height:7, borderRadius:'50%', background:'#00e87a' }} />}
+        {/* Left — 6 scout slots (narrower) */}
+        <div style={{ flex:1, padding:12, display:'grid', gridTemplateColumns:'1fr 1fr', gridTemplateRows:'1fr 1fr 1fr', gap:10, overflow:'hidden' }}>
+          {[0,1,2,3,4,5].map(i => {
+            const s = slots[i];
+            const isEmpty = !s?.mission;
+            const isActive = activeScout === i;
+            const isHov = hoveredSlot === i;
+            return (
+              <div key={i}
+                onClick={()=>{
+                  if (isEmpty) { setDeploySlot(i); setShowDeployModal(true); }
+                  else { setActiveScout(i); setScoutScreen('report'); setScoutReportSel(null); setScoutReportTab('ALL'); }
+                }}
+                onMouseEnter={()=>setHoveredSlot(i)}
+                onMouseLeave={()=>setHoveredSlot(null)}
+                style={{
+                  background: isActive?`${accent}15`: s?.done?'rgba(0,232,122,0.06)': s?.active?'rgba(245,197,24,0.05)': isHov?'rgba(255,255,255,0.04)':'rgba(255,255,255,0.02)',
+                  border: `1px solid ${isActive?accent: s?.done?'rgba(0,232,122,0.25)': s?.active?'rgba(245,197,24,0.2)': isHov?'rgba(255,255,255,0.15)':'rgba(255,255,255,0.07)'}`,
+                  borderRadius:3, padding:'12px 14px', cursor:'pointer',
+                  display:'flex', flexDirection:'column', gap:8,
+                  transition:'all 0.12s', position:'relative', overflow:'hidden',
+                }}
+              >
+                {/* Status indicator */}
+                <div style={{ position:'absolute', top:10, right:10 }}>
+                  {s?.active && <div style={{ width:8, height:8, borderRadius:'50%', background:'#f5c518', animation:'scoutPulse 1.5s infinite' }} />}
+                  {s?.done   && <div style={{ width:8, height:8, borderRadius:'50%', background:'#00e87a' }} />}
+                </div>
+
+                {isEmpty ? (
+                  /* Empty slot — + button */
+                  <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:8 }}>
+                    <div style={{ width:36, height:36, borderRadius:'50%', border:'1.5px dashed rgba(255,255,255,0.15)', display:'flex', alignItems:'center', justifyContent:'center' }}>
+                      <span style={{ fontSize:20, color:'rgba(255,255,255,0.2)', lineHeight:1 }}>+</span>
+                    </div>
+                    <span style={{ fontFamily:"var(--font-mono)", fontSize:7, color:'rgba(255,255,255,0.2)', letterSpacing:2, textTransform:'uppercase' }}>Hire Scout</span>
+                  </div>
+                ) : (
+                  <>
+                    {/* Name */}
+                    <div style={{ fontFamily:"var(--font-display)", fontSize:12, fontWeight:900, fontStyle:'italic', color:'#f0f2f5', lineHeight:1.2, textTransform:'uppercase', letterSpacing:0.5, paddingRight:14 }}>{s.name}</div>
+
+                    {/* Region */}
+                    <div style={{ fontFamily:"var(--font-mono)", fontSize:8, color:'#556070', letterSpacing:1 }}>
+                      {s.region} · {s.active ? 'Scouting' : s.done ? 'Report Ready' : 'Area Scouting'}
+                    </div>
+
+                    {/* Players count */}
+                    <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={s.players>0?accent:'#3b4555'} strokeWidth="1.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+                      <span style={{ fontFamily:"var(--font-display)", fontSize:16, fontWeight:900, color: s.players>0?accent:'#3b4555' }}>{s.players}</span>
+                      {s.active && s.weeksLeft !== null && (
+                        <span style={{ fontFamily:"var(--font-mono)", fontSize:7, color:'#f5c518', marginLeft:2 }}>{s.weeksLeft}w left</span>
+                      )}
+                    </div>
+
+                    {/* Stars */}
+                    <div style={{ display:'flex', flexDirection:'column', gap:3 }}>
+                      <span style={{ fontFamily:"var(--font-mono)", fontSize:6, color:'#445060', letterSpacing:1.5, textTransform:'uppercase' }}>Judgment</span>
+                      <ScoutStars rating={s.rating} color={accent} />
+                    </div>
+                  </>
+                )}
               </div>
-
-              {/* Name */}
-              <div style={{ fontFamily:"var(--font-display)", fontSize:10, fontWeight:900, fontStyle:'italic', color:'#f0f2f5', lineHeight:1.2, textTransform:'uppercase', letterSpacing:0.5 }}>{s.name}</div>
-
-              {/* Region label */}
-              <div style={{ fontFamily:"var(--font-mono)", fontSize:7, color:'#556070', letterSpacing:1 }}>Area Scouting</div>
-
-              {/* Players found */}
-              <div style={{ display:'flex', alignItems:'center', gap:5 }}>
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#9aa3b2" strokeWidth="1.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
-                <span style={{ fontFamily:"var(--font-display)", fontSize:13, fontWeight:900, color: s.players>0?accent:'#3b4555' }}>{s.players}</span>
-                {s.active && s.weeksLeft && <span style={{ fontFamily:"var(--font-mono)", fontSize:6, color:'#f5c518' }}>W{s.weeksLeft} left</span>}
-              </div>
-
-              {/* Stars */}
-              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-                <div style={{ fontFamily:"var(--font-mono)", fontSize:6, color:'#445060', letterSpacing:1 }}>Judgment</div>
-                <ScoutStars rating={s.rating} color={accent} />
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
-        {/* Right — summary panel */}
-        <div style={{ width:180, flexShrink:0, borderLeft:'1px solid rgba(255,255,255,0.07)', display:'flex', flexDirection:'column', padding:12, gap:12, overflow:'hidden' }}>
-          <div style={{ fontFamily:"var(--font-display)", fontSize:13, fontWeight:900, fontStyle:'italic', color:'#f0f2f5', textTransform:'uppercase', letterSpacing:0.5, lineHeight:1.2 }}>Scouted Players Summary</div>
+        {/* Right — wider sidebar, shows selected scout's data */}
+        <div style={{ width:240, flexShrink:0, borderLeft:'1px solid rgba(255,255,255,0.07)', display:'flex', flexDirection:'column', padding:16, gap:16, overflow:'hidden' }}>
 
-          <div>
-            <div style={{ fontFamily:"var(--font-mono)", fontSize:7, color:'#556070', letterSpacing:1.5, textTransform:'uppercase', marginBottom:4 }}>Players Scouted</div>
-            <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9aa3b2" strokeWidth="1.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
-              <span style={{ fontFamily:"var(--font-display)", fontSize:24, fontWeight:900, color:'#f0f2f5' }}>{allFound.length}</span>
+          {!sidebarSlot || !sidebarSlot.mission ? (
+            /* No scout selected */
+            <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:10, opacity:0.3 }}>
+              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#f0f2f5" strokeWidth="1"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+              <span style={{ fontFamily:"var(--font-mono)", fontSize:7, color:'#f0f2f5', letterSpacing:2, textTransform:'uppercase', textAlign:'center' }}>Hover a scout to preview</span>
             </div>
-          </div>
-
-          <div style={{ display:'flex', gap:10 }}>
-            <div style={{ display:'flex', alignItems:'center', gap:5 }}>
-              <div style={{ width:6, height:6, borderRadius:'50%', background:'#00e87a' }} />
-              <span style={{ fontFamily:"var(--font-mono)", fontSize:7, color:'#00e87a' }}>0 New</span>
-            </div>
-            <div style={{ display:'flex', alignItems:'center', gap:5 }}>
-              <div style={{ width:6, height:6, borderRadius:'50%', background:'#f5c518' }} />
-              <span style={{ fontFamily:"var(--font-mono)", fontSize:7, color:'#f5c518' }}>0 Updates</span>
-            </div>
-          </div>
-
-          {/* Donut placeholder */}
-          <div style={{ display:'flex', justifyContent:'center', padding:'4px 0' }}>
-            <svg width="72" height="72" viewBox="0 0 72 72">
-              <circle cx="36" cy="36" r="28" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="12"/>
-              {allFound.length > 0 && (
-                <circle cx="36" cy="36" r="28" fill="none" stroke={accent} strokeWidth="12"
-                  strokeDasharray={`${(breakdown.Midfielders/allFound.length)*176} 176`}
-                  strokeLinecap="round" transform="rotate(-90 36 36)"/>
-              )}
-            </svg>
-          </div>
-
-          {/* Breakdown */}
-          <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
-            {[['Strikers','#ff3b5c'],['Midfielders',accent],['Defenders','#3b82f6'],['Goalkeepers','#f5c518']].map(([pos,col])=>(
-              <div key={pos} style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-                <div style={{ display:'flex', alignItems:'center', gap:5 }}>
-                  <div style={{ width:6, height:6, borderRadius:'50%', background:col }} />
-                  <span style={{ fontFamily:"var(--font-mono)", fontSize:7, color:'#9aa3b2' }}>{pos}</span>
-                </div>
-                <span style={{ fontFamily:"var(--font-display)", fontSize:11, fontWeight:900, color:col }}>{breakdown[pos]}</span>
+          ) : (
+            <>
+              {/* Scout name */}
+              <div>
+                <div style={{ fontFamily:"var(--font-display)", fontSize:15, fontWeight:900, fontStyle:'italic', color:'#f0f2f5', lineHeight:1.2, textTransform:'uppercase' }}>{sidebarSlot.name}</div>
+                <div style={{ fontFamily:"var(--font-mono)", fontSize:8, color:'#556070', letterSpacing:1, marginTop:4 }}>{sidebarSlot.region}</div>
+                <div style={{ marginTop:6 }}><ScoutStars rating={sidebarSlot.rating} color={accent} /></div>
               </div>
-            ))}
-          </div>
 
-          {/* Deploy new scout button */}
-          <button onClick={()=>sendScout()} style={{ marginTop:'auto', padding:'7px 8px', background:`${accent}18`, border:`1px solid ${accent}44`, color:accent, fontFamily:"var(--font-display)", fontSize:9, fontWeight:900, fontStyle:'italic', letterSpacing:1.5, textTransform:'uppercase', cursor:'pointer' }}>
-            Deploy Scout
-          </button>
+              <div style={{ borderTop:'1px solid rgba(255,255,255,0.06)', paddingTop:14 }}>
+                {/* Header label */}
+                <div style={{ fontFamily:"var(--font-display)", fontSize:13, fontWeight:900, fontStyle:'italic', color:'#f0f2f5', textTransform:'uppercase', letterSpacing:0.5, marginBottom:12 }}>Players Scouted</div>
+
+                {/* Total count */}
+                <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:12 }}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#9aa3b2" strokeWidth="1.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+                  <span style={{ fontFamily:"var(--font-display)", fontSize:28, fontWeight:900, color:'#f0f2f5' }}>{sidebarTotal}</span>
+                </div>
+
+                {/* Donut + breakdown side by side (perpendicular) */}
+                <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+                  {/* Donut */}
+                  <svg width="80" height="80" viewBox="0 0 80 80" style={{ flexShrink:0 }}>
+                    <circle cx="40" cy="40" r="30" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="14"/>
+                    {sidebarTotal > 0 && [
+                      { key:'Strikers',    col:'#ff3b5c' },
+                      { key:'Midfielders', col:accent    },
+                      { key:'Defenders',   col:'#3b82f6' },
+                      { key:'Goalkeepers', col:'#f5c518' },
+                    ].reduce((acc, item) => {
+                      const pct = sidebarBreakdown[item.key] / sidebarTotal;
+                      const circ = 2 * Math.PI * 30;
+                      const dash = pct * circ;
+                      const offset = -(acc.offset);
+                      acc.els.push(
+                        <circle key={item.key} cx="40" cy="40" r="30" fill="none" stroke={item.col} strokeWidth="14"
+                          strokeDasharray={`${dash} ${circ}`}
+                          strokeDashoffset={offset}
+                          transform="rotate(-90 40 40)" opacity={sidebarBreakdown[item.key]>0?1:0}/>
+                      );
+                      acc.offset -= dash;
+                      return acc;
+                    }, { offset: 0, els: [] }).els}
+                  </svg>
+
+                  {/* Breakdown list */}
+                  <div style={{ flex:1, display:'flex', flexDirection:'column', gap:8 }}>
+                    {[['Strikers','#ff3b5c'],['Midfielders',accent],['Defenders','#3b82f6'],['Goalkeepers','#f5c518']].map(([pos,col])=>(
+                      <div key={pos} style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+                        <div style={{ display:'flex', alignItems:'center', gap:5 }}>
+                          <div style={{ width:7, height:7, borderRadius:'50%', background:col, flexShrink:0 }} />
+                          <span style={{ fontFamily:"var(--font-mono)", fontSize:8, color:'#9aa3b2' }}>{pos}</span>
+                        </div>
+                        <span style={{ fontFamily:"var(--font-display)", fontSize:13, fontWeight:900, color:col }}>{sidebarBreakdown[pos]}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Status */}
+              <div style={{ marginTop:'auto', padding:'10px 12px', background: sidebarSlot.done?'rgba(0,232,122,0.06)':'rgba(245,197,24,0.06)', border:`1px solid ${sidebarSlot.done?'rgba(0,232,122,0.2)':'rgba(245,197,24,0.2)'}`, borderRadius:2 }}>
+                <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                  <div style={{ width:7, height:7, borderRadius:'50%', background: sidebarSlot.done?'#00e87a':'#f5c518', animation: sidebarSlot.active?'scoutPulse 1.5s infinite':undefined }} />
+                  <span style={{ fontFamily:"var(--font-mono)", fontSize:8, color: sidebarSlot.done?'#00e87a':'#f5c518', letterSpacing:1, textTransform:'uppercase' }}>
+                    {sidebarSlot.done ? 'Report Ready' : `Scouting · ${sidebarSlot.weeksLeft}w left`}
+                  </span>
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </div>
+
+      {/* ── Deploy Modal ── */}
+      {showDeployModal && (
+        <div style={{ position:'absolute', inset:0, background:'rgba(0,0,0,0.75)', zIndex:20, display:'flex', alignItems:'center', justifyContent:'center' }} onClick={()=>setShowDeployModal(false)}>
+          <div style={{ width:340, background:'#0c1018', border:'1px solid rgba(255,255,255,0.12)', borderRadius:4, overflow:'hidden' }} onClick={e=>e.stopPropagation()}>
+            {/* Modal header */}
+            <div style={{ padding:'14px 18px', borderBottom:'1px solid rgba(255,255,255,0.08)', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+              <span style={{ fontFamily:"var(--font-display)", fontSize:15, fontWeight:900, fontStyle:'italic', color:'#f0f2f5', letterSpacing:0.5, textTransform:'uppercase' }}>Deploy Scout</span>
+              <button onClick={()=>setShowDeployModal(false)} style={{ width:24, height:24, background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.1)', color:'#9aa3b2', fontSize:12, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>✕</button>
+            </div>
+
+            <div style={{ padding:'16px 18px', display:'flex', flexDirection:'column', gap:16 }}>
+
+              {/* Region */}
+              <div>
+                <div style={{ fontFamily:"var(--font-mono)", fontSize:8, color:'#556070', letterSpacing:2, textTransform:'uppercase', marginBottom:8 }}>Scouting Region</div>
+                <div style={{ display:'flex', flexWrap:'wrap', gap:5 }}>
+                  {['Europe','S. America','Africa','Asia','N. America','Oceania'].map(r=>(
+                    <button key={r} onClick={()=>setModalRegion(r)} style={{ padding:'5px 10px', background: modalRegion===r?`${accent}22`:'rgba(255,255,255,0.03)', border:`1px solid ${modalRegion===r?accent:'rgba(255,255,255,0.08)'}`, color: modalRegion===r?accent:'#9aa3b2', fontFamily:"var(--font-display)", fontSize:9, fontWeight:700, fontStyle:'italic', cursor:'pointer' }}>{r}</button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Position Focus */}
+              <div>
+                <div style={{ fontFamily:"var(--font-mono)", fontSize:8, color:'#556070', letterSpacing:2, textTransform:'uppercase', marginBottom:8 }}>Position Focus</div>
+                <div style={{ display:'flex', flexWrap:'wrap', gap:5 }}>
+                  {['Any','GK','DEF','MID','FWD','ST','CM','CB'].map(p=>(
+                    <button key={p} onClick={()=>setModalPos(p)} style={{ padding:'5px 10px', background: modalPos===p?`${accent}22`:'rgba(255,255,255,0.03)', border:`1px solid ${modalPos===p?accent:'rgba(255,255,255,0.08)'}`, color: modalPos===p?accent:'#9aa3b2', fontFamily:"var(--font-display)", fontSize:9, fontWeight:700, fontStyle:'italic', cursor:'pointer' }}>{p}</button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Scout Duration */}
+              <div>
+                <div style={{ fontFamily:"var(--font-mono)", fontSize:8, color:'#556070', letterSpacing:2, textTransform:'uppercase', marginBottom:8 }}>Scout Duration</div>
+                <div style={{ display:'flex', gap:6 }}>
+                  {SCOUT_DURATIONS.map(d=>(
+                    <button key={d.label} onClick={()=>setModalDuration(d)} style={{ flex:1, padding:'8px 6px', background: modalDuration.label===d.label?`${accent}22`:'rgba(255,255,255,0.03)', border:`1px solid ${modalDuration.label===d.label?accent:'rgba(255,255,255,0.08)'}`, color: modalDuration.label===d.label?accent:'#9aa3b2', fontFamily:"var(--font-display)", fontSize:10, fontWeight:900, fontStyle:'italic', cursor:'pointer', textAlign:'center' }}>
+                      <div>{d.label}</div>
+                      <div style={{ fontFamily:"var(--font-mono)", fontSize:7, color: modalDuration.label===d.label?`${accent}88`:'#3a4455', marginTop:3 }}>{d.quality}</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Deploy button */}
+              <button onClick={handleDeploy} style={{ width:'100%', padding:'11px', background:`${accent}22`, border:`1px solid ${accent}55`, color:accent, fontFamily:"var(--font-display)", fontSize:13, fontWeight:900, fontStyle:'italic', letterSpacing:3, textTransform:'uppercase', cursor:'pointer', marginTop:4 }}>
+                Deploy
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </BentoBox>
   );
 
@@ -624,7 +765,7 @@ function ScoutSection({
                         <span style={{ fontFamily:"var(--font-mono)", fontSize:7, color:'#3b4555' }}>Age {p.age}</span>
                       </div>
                     </div>
-                    <img src={`https://flagcdn.com/w20/${nationalityToCode(p.nationality)}.png`} alt="" style={{ height:10, borderRadius:1, flexShrink:0 }} onError={e=>e.target.style.display='none'} />
+                    <img src={`https://flagcdn.com/w20/${natCode(p.nationality)}.png`} alt="" style={{ height:10, borderRadius:1, flexShrink:0 }} onError={e=>e.target.style.display='none'} />
                   </div>
                 );
               })}
@@ -646,7 +787,7 @@ function ScoutSection({
                   <div style={{ position:'absolute', right:-10, top:-14, fontFamily:"var(--font-display)", fontSize:120, fontWeight:900, color:'rgba(255,255,255,0.03)', lineHeight:1, userSelect:'none' }}>{scoutReportSel.overall}</div>
                   <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
                     <span style={{ fontFamily:"var(--font-mono)", fontSize:8, color:'#556070' }}>{scoutReportSel.club}</span>
-                    <img src={`https://flagcdn.com/w20/${nationalityToCode(scoutReportSel.nationality)}.png`} alt="" style={{ height:11, borderRadius:1, marginLeft:'auto' }} onError={e=>e.target.style.display='none'} />
+                    <img src={`https://flagcdn.com/w20/${natCode(scoutReportSel.nationality)}.png`} alt="" style={{ height:11, borderRadius:1, marginLeft:'auto' }} onError={e=>e.target.style.display='none'} />
                   </div>
                   <div style={{ display:'flex', alignItems:'flex-end', justifyContent:'space-between' }}>
                     <div>
@@ -723,7 +864,7 @@ function ScoutSection({
             <div style={{ flex:1 }}>
               <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
                 <span style={{ fontFamily:"var(--font-mono)", fontSize:9, color:pc, letterSpacing:2 }}>{p.position}</span>
-                <img src={`https://flagcdn.com/w20/${nationalityToCode(p.nationality)}.png`} alt="" style={{ height:12 }} onError={e=>e.target.style.display='none'} />
+                <img src={`https://flagcdn.com/w20/${natCode(p.nationality)}.png`} alt="" style={{ height:12 }} onError={e=>e.target.style.display='none'} />
               </div>
               <div style={{ fontFamily:"var(--font-display)", fontSize:26, fontWeight:900, fontStyle:'italic', color:'#f0f2f5', lineHeight:1, marginBottom:6 }}>{p.name}</div>
               <div style={{ display:'flex', gap:16 }}>
@@ -783,6 +924,176 @@ function ScoutSection({
   }
 
   return null;
+}
+
+
+/* ── Academy player detail component ── */
+function AcademyDetail({ p, accent, fmt, handlePromote }) {
+  const oc = ovrColor(p.overall);
+  const pc = posColor(p.position);
+  const potColor = p.potential>=85?'#f5c518':p.potential>=78?'#00e87a':'#9aa3ae';
+  const stats = [['PAC',p.pace??65],['SHO',p.shooting??60],['PAS',p.passing??63],['DRI',p.dribbling??66],['DEF',p.defending??55],['PHY',p.physical??62]];
+  return (
+    <div style={{ flex:1, display:'flex', flexDirection:'column', overflow:'hidden' }}>
+      <div style={{ padding:'14px 16px', borderBottom:'1px solid rgba(255,255,255,0.07)', position:'relative', overflow:'hidden', flexShrink:0 }}>
+        <div style={{ position:'absolute', right:-8, top:-12, fontFamily:"var(--font-display)", fontSize:110, fontWeight:900, color:'rgba(255,255,255,0.03)', lineHeight:1, userSelect:'none' }}>{p.overall}</div>
+        <div style={{ display:'flex', alignItems:'center', gap:6, marginBottom:8 }}>
+          <span style={{ padding:'2px 7px', border:`1px solid ${pc}55`, fontFamily:"var(--font-mono)", fontSize:8, color:pc, letterSpacing:1.5 }}>{p.position}</span>
+          <img src={`https://flagcdn.com/w20/${natCode(p.nationality)}.png`} alt="" style={{ height:12, borderRadius:1 }} onError={e=>e.target.style.display='none'} />
+          <span style={{ marginLeft:'auto', fontFamily:"var(--font-mono)", fontSize:8, color:'#3b4555' }}>{p.nationality}</span>
+        </div>
+        <div style={{ display:'flex', alignItems:'flex-end', justifyContent:'space-between' }}>
+          <div>
+            <div style={{ fontFamily:"var(--font-display)", fontSize:22, fontWeight:900, fontStyle:'italic', color:'#f0f2f5', lineHeight:1 }}>{p.name}</div>
+            <div style={{ display:'flex', gap:10, marginTop:5 }}>
+              <span style={{ fontFamily:"var(--font-mono)", fontSize:8, color:'#556070' }}>Age {p.age}</span>
+              <span style={{ fontFamily:"var(--font-mono)", fontSize:8, color:'#556070' }}>Foot {p.foot||'Right'}</span>
+            </div>
+          </div>
+          <div style={{ textAlign:'right' }}>
+            <div style={{ fontFamily:"var(--font-display)", fontSize:42, fontWeight:900, color:oc, lineHeight:1 }}>{p.overall}</div>
+            <div style={{ fontFamily:"var(--font-mono)", fontSize:6, color:'#556070', letterSpacing:2 }}>OVR</div>
+          </div>
+        </div>
+        <div style={{ display:'flex', gap:16, marginTop:10 }}>
+          {[['Value',p.value?fmt(p.value):'—'],['Potential',p.potential],['Wage',p.wage?`£${(p.wage/1e3).toFixed(0)}K/w`:'—']].map(([l,v])=>(
+            <div key={l}>
+              <div style={{ fontFamily:"var(--font-display)", fontSize:12, fontWeight:700, fontStyle:'italic', color: l==='Potential'?potColor:'#d0d4da' }}>{v}</div>
+              <div style={{ fontFamily:"var(--font-mono)", fontSize:6, color:'#445060', letterSpacing:1, textTransform:'uppercase', marginTop:2 }}>{l}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div style={{ flex:1, overflowY:'auto', padding:'10px 16px', display:'flex', flexDirection:'column', gap:12 }}>
+        <div>
+          <div style={{ fontFamily:"var(--font-mono)", fontSize:7, color:'#445060', letterSpacing:2, textTransform:'uppercase', marginBottom:8 }}>Attributes</div>
+          {stats.map(([lbl,val])=>{
+            const c=val>=75?'#00e87a':val>=60?'#3b82f6':'#9aa3ae';
+            return (
+              <div key={lbl} style={{ display:'flex', alignItems:'center', gap:10, padding:'5px 0', borderBottom:'1px solid rgba(255,255,255,0.04)' }}>
+                <span style={{ fontFamily:"var(--font-mono)", fontSize:8, color:'#556070', letterSpacing:1.5, width:28, flexShrink:0 }}>{lbl}</span>
+                <div style={{ flex:1, height:3, background:'rgba(255,255,255,0.07)', borderRadius:2, overflow:'hidden' }}>
+                  <div style={{ width:`${val}%`, height:'100%', background:c }} />
+                </div>
+                <span style={{ fontFamily:"var(--font-display)", fontSize:13, fontWeight:900, color:c, width:24, textAlign:'right', flexShrink:0 }}>{val}</span>
+              </div>
+            );
+          })}
+        </div>
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+          {[
+            ['Skill Moves','★★★☆☆'],['Weak Foot','★★★☆☆'],
+            ['Attack Work',p.potential>=78?'High':'Medium'],['Def Work',p.potential>=80?'High':'Low'],
+            ['Traits','—'],['Growth',p.potential-p.overall>12?'High':p.potential-p.overall>6?'Medium':'Low'],
+          ].map(([l,v])=>(
+            <div key={l} style={{ background:'rgba(255,255,255,0.02)', border:'1px solid rgba(255,255,255,0.06)', padding:'6px 8px' }}>
+              <div style={{ fontFamily:"var(--font-mono)", fontSize:6, color:'#445060', letterSpacing:1.5, textTransform:'uppercase', marginBottom:3 }}>{l}</div>
+              <div style={{ fontFamily:"var(--font-display)", fontSize:11, fontWeight:700, color:'#d0d4da' }}>{v}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div style={{ padding:'10px 16px', borderTop:'1px solid rgba(255,255,255,0.07)', display:'flex', gap:8, flexShrink:0 }}>
+        <button onClick={()=>handlePromote(p)} style={{ flex:1, padding:'9px', background:`${accent}22`, border:`1px solid ${accent}55`, color:accent, fontFamily:"var(--font-display)", fontSize:11, fontWeight:900, fontStyle:'italic', letterSpacing:2, textTransform:'uppercase', cursor:'pointer' }}>Promote to First Team</button>
+      </div>
+    </div>
+  );
+}
+
+/* ── History Section component (FM-style) ── */
+function HistorySection({ history, fmt, accent }) {
+  const totalIn  = history.filter(h=>h.type==='out').reduce((s,h)=>s+(h.fee||0),0);
+  const totalOut = history.filter(h=>h.type==='in').reduce((s,h)=>s+(h.fee||0),0);
+  const netSpend = totalOut - totalIn;
+  return (
+    <BentoBox style={{ gridColumn:'1', gridRow:'1', padding:0, display:'flex', flexDirection:'column', overflow:'hidden' }}>
+      {/* Header */}
+      <div style={{ padding:'10px 16px', borderBottom:'1px solid rgba(255,255,255,0.07)', display:'flex', alignItems:'center', justifyContent:'space-between', flexShrink:0 }}>
+        <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+          <span style={{ fontFamily:"var(--font-display)", fontSize:16, fontWeight:900, fontStyle:'italic', color:'#f0f2f5', letterSpacing:0.5, textTransform:'uppercase' }}>Transfer History</span>
+        </div>
+        {/* Net spend pill */}
+        <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+          <span style={{ fontFamily:"var(--font-mono)", fontSize:7, color:'#556070', letterSpacing:1 }}>Net Spend</span>
+          <span style={{ fontFamily:"var(--font-display)", fontSize:13, fontWeight:900, fontStyle:'italic', color: netSpend>0?'#ff3b5c':'#00e87a' }}>
+            {netSpend>0?'-':'+'}{fmt(Math.abs(netSpend))}
+          </span>
+        </div>
+      </div>
+
+      {/* Column headers */}
+      <div style={{ display:'grid', gridTemplateColumns:'60px 1fr 120px 120px 100px', gap:8, padding:'8px 16px', borderBottom:'1px solid rgba(255,255,255,0.07)', flexShrink:0 }}>
+        {['Date','Name','From','To','Fee'].map(h=>(
+          <span key={h} style={{ fontFamily:"var(--font-mono)", fontSize:7, color:'#445060', letterSpacing:1.5, textTransform:'uppercase', textAlign: h==='Fee'?'right': h==='Name'?'left':'center' }}>{h}</span>
+        ))}
+      </div>
+
+      {/* Rows */}
+      <div style={{ flex:1, overflowY:'auto' }}>
+        {history.length === 0 ? (
+          <div style={{ padding:32, textAlign:'center', display:'flex', flexDirection:'column', alignItems:'center', gap:10 }}>
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#1e2a38" strokeWidth="1.2"><path d="M9 12h6m-6 4h6m2 5H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5.586a1 1 0 0 1 .707.293l5.414 5.414a1 1 0 0 1 .293.707V19a2 2 0 0 1-2 2z"/></svg>
+            <span style={{ fontFamily:"var(--font-mono)", fontSize:8, color:'#1e2a38', letterSpacing:3, textTransform:'uppercase' }}>No transfers yet</span>
+          </div>
+        ) : history.map((h, i) => {
+          const isIn = h.type === 'in';
+          return (
+            <div key={i} style={{
+              display:'grid', gridTemplateColumns:'60px 1fr 120px 120px 100px', gap:8,
+              padding:'12px 16px', alignItems:'center',
+              borderBottom:'1px solid rgba(255,255,255,0.04)',
+              background: i%2===0 ? 'transparent' : 'rgba(255,255,255,0.01)',
+              transition:'background 0.1s',
+            }}
+              onMouseEnter={e=>e.currentTarget.style.background='rgba(255,255,255,0.03)'}
+              onMouseLeave={e=>e.currentTarget.style.background= i%2===0?'transparent':'rgba(255,255,255,0.01)'}
+            >
+              {/* Date */}
+              <span style={{ fontFamily:"var(--font-mono)", fontSize:8, color:'#556070' }}>
+                Wk {h.week}
+              </span>
+
+              {/* Player name + flag */}
+              <div style={{ display:'flex', alignItems:'center', gap:8, minWidth:0 }}>
+                {/* Avatar circle */}
+                <div style={{ width:32, height:32, borderRadius:2, background:`${isIn?'rgba(0,232,122,0.08)':'rgba(255,59,92,0.08)'}`, border:`1px solid ${isIn?'rgba(0,232,122,0.2)':'rgba(255,59,92,0.2)'}`, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={isIn?'#00e87a':'#ff3b5c'} strokeWidth="1.5"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                </div>
+                <div style={{ minWidth:0 }}>
+                  <div style={{ fontFamily:"var(--font-display)", fontSize:13, fontWeight:900, fontStyle:'italic', color:'#f0f2f5', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', letterSpacing:0.3, textTransform:'uppercase' }}>{h.player}</div>
+                  <div style={{ display:'flex', alignItems:'center', gap:5, marginTop:2 }}>
+                    <span style={{ fontFamily:"var(--font-mono)", fontSize:7, color: isIn?'#00e87a':'#ff3b5c', letterSpacing:1 }}>{isIn ? '↓ SIGNED' : '↑ SOLD'}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* From club */}
+              <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:6 }}>
+                <div style={{ width:22, height:22, background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.08)', borderRadius:2, display:'flex', alignItems:'center', justifyContent:'center' }}>
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#556070" strokeWidth="1.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                </div>
+                <span style={{ fontFamily:"var(--font-mono)", fontSize:7, color:'#9aa3b2', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{h.fromClub||'—'}</span>
+              </div>
+
+              {/* Arrow + To club */}
+              <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:6 }}>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#3b4555" strokeWidth="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                <div style={{ width:22, height:22, background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.08)', borderRadius:2, display:'flex', alignItems:'center', justifyContent:'center' }}>
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#556070" strokeWidth="1.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                </div>
+                <span style={{ fontFamily:"var(--font-mono)", fontSize:7, color:'#9aa3b2', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{h.toClub||'—'}</span>
+              </div>
+
+              {/* Fee */}
+              <div style={{ textAlign:'right' }}>
+                <span style={{ fontFamily:"var(--font-display)", fontSize:14, fontWeight:900, fontStyle:'italic', color: isIn?'#ff3b5c':'#00e87a' }}>{fmt(h.fee||0)}</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </BentoBox>
+  );
 }
 
 export default function Transfers() {
@@ -1128,7 +1439,7 @@ export default function Transfers() {
                         <div style={{ position:'absolute', right:-10, top:-16, fontFamily:"var(--font-display)", fontSize:130, fontWeight:900, color:'rgba(255,255,255,0.03)', lineHeight:1, userSelect:'none' }}>{hubPlayer.overall}</div>
                         <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:10 }}>
                           <span style={{ fontFamily:"var(--font-mono)", fontSize:9, color:posColor(hubPlayer.position), letterSpacing:2 }}>{hubPlayer.position}</span>
-                          <img src={`https://flagcdn.com/w20/${nationalityToCode(hubPlayer.nationality)}.png`} alt="" style={{ height:12, borderRadius:1 }} onError={e=>e.target.style.display='none'} />
+                          <img src={`https://flagcdn.com/w20/${natCode(hubPlayer.nationality)}.png`} alt="" style={{ height:12, borderRadius:1 }} onError={e=>e.target.style.display='none'} />
                           <span style={{ fontFamily:"var(--font-mono)", fontSize:8, color:'#445060', marginLeft:'auto' }}>{hubPlayer.club||myClub?.name}</span>
                         </div>
                         <div style={{ display:'flex', alignItems:'flex-end', justifyContent:'space-between' }}>
@@ -1220,76 +1531,75 @@ export default function Transfers() {
             BOX 4 — YOUTH (bottom middle)
             row: 2, col: 2 split left
         ═══════════════════════════════ */}
-        {(section === 'youth' || !section) && <BentoBox style={{ gridColumn: section?'1':'2', gridRow:'2', position:'relative' }}>
-          <BoxHeader label="Youth Academy" accent={accent} />
-          <div style={{ flex:1, overflowY:'auto' }}>
-            {(youthPlayers||[]).length === 0 ? (
-              <div style={{ padding:10, textAlign:'center', fontFamily:"var(--font-mono)", fontSize:7, color:'#556070' }}>No youth players</div>
-            ) : (youthPlayers||[]).map((p,i)=>{
-              const isSel = syncedYouth?.id===p.id;
-              const potColor = p.potential>=85?'#f5c518':p.potential>=78?'#00e87a':'#9aa3ae';
-              return (
-                <div key={p.id} onClick={()=>setSelYouth(p)} className="tr-hov" style={{ display:'grid', gridTemplateColumns:'16px 1fr 24px 32px 24px', padding:'4px 8px', alignItems:'center', cursor:'pointer', background: isSel?`${accent}12`:'transparent', borderLeft: isSel?`2px solid ${accent}`:'2px solid transparent', borderBottom:'1px solid rgba(255,255,255,0.03)' }}>
-                  <span style={{ fontFamily:"var(--font-mono)", fontSize:6, color:'#556070' }}>{i+1}</span>
-                  <div style={{ minWidth:0 }}>
-                    <div style={{ fontFamily:"var(--font-display)", fontSize:9, fontWeight:700, color:'#f0f2f5', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p.name}</div>
-                  </div>
-                  <span style={{ fontFamily:"var(--font-display)", fontSize:9, fontWeight:900, color:ovrColor(p.overall) }}>{p.overall}</span>
-                  <span style={{ fontFamily:"var(--font-display)", fontSize:9, fontWeight:700, color:potColor }}>↑{p.potential}</span>
-                  <span style={{ fontFamily:"var(--font-display)", fontSize:7, fontWeight:700, color:posColor(p.position) }}>{p.position}</span>
-                </div>
-              );
-            })}
+        {(section === 'youth' || !section) && <BentoBox style={{ gridColumn: section?'1':'2', gridRow:'2', padding:0, display:'flex', flexDirection:'column', overflow:'hidden', height:'100%' }}>
+          {/* Header */}
+          <div style={{ padding:'8px 14px', borderBottom:'1px solid rgba(255,255,255,0.07)', display:'flex', alignItems:'center', justifyContent:'space-between', flexShrink:0 }}>
+            <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+              <span style={{ fontFamily:"var(--font-mono)", fontSize:8, color:'#556070', letterSpacing:2, textTransform:'uppercase' }}>Career</span>
+              <span style={{ color:'#3b4555' }}>›</span>
+              <span style={{ fontFamily:"var(--font-mono)", fontSize:8, color:accent, letterSpacing:2, textTransform:'uppercase' }}>Youth Academy</span>
+            </div>
+            <span style={{ fontFamily:"var(--font-mono)", fontSize:7, color:'#3b4555' }}>{(youthPlayers||[]).length} prospects</span>
           </div>
-          <DetailCard player={syncedYouth} accent={accent} budget={budget} mode="promote" onAction={handlePromote} onShortlist={()=>{}} shortlisted={false} onClose={()=>setSelYouth(null)} />
+
+          <div style={{ flex:1, display:'flex', overflow:'hidden' }}>
+            {/* Left — player list */}
+            <div style={{ width:'48%', flexShrink:0, display:'flex', flexDirection:'column', borderRight:'1px solid rgba(255,255,255,0.07)', overflow:'hidden' }}>
+              {/* Column headers */}
+              <div style={{ display:'grid', gridTemplateColumns:'32px 1fr 28px 36px 36px 60px', gap:4, padding:'6px 10px', borderBottom:'1px solid rgba(255,255,255,0.06)', flexShrink:0 }}>
+                {['POS','NAME','AGE','OVR','POT','PLAN'].map(h=>(
+                  <span key={h} style={{ fontFamily:"var(--font-mono)", fontSize:6, color:'#445060', letterSpacing:1.5, textTransform:'uppercase', textAlign: h==='NAME'?'left':'center' }}>{h}</span>
+                ))}
+              </div>
+              {/* List */}
+              <div style={{ flex:1, overflowY:'auto' }}>
+                {(youthPlayers||[]).length === 0 ? (
+                  <div style={{ padding:20, textAlign:'center', fontFamily:"var(--font-mono)", fontSize:7, color:'#3b4555', letterSpacing:2 }}>No youth players</div>
+                ) : (youthPlayers||[]).map((p,i)=>{
+                  const isSel = syncedYouth?.id===p.id;
+                  const potColor = p.potential>=85?'#f5c518':p.potential>=78?'#00e87a':'#9aa3ae';
+                  const plan = p.potential>=82?'Attacking...':p.potential>=75?'Balanced':'Sweeper...';
+                  return (
+                    <div key={p.id} onClick={()=>setSelYouth(p)} className="tr-hov"
+                      style={{ display:'grid', gridTemplateColumns:'32px 1fr 28px 36px 36px 60px', gap:4, padding:'8px 10px', alignItems:'center', cursor:'pointer', borderBottom:'1px solid rgba(255,255,255,0.04)', background: isSel?`${accent}12`:'transparent', borderLeft: isSel?`3px solid ${accent}`:'3px solid transparent', transition:'all 0.1s' }}>
+                      {/* POS badge */}
+                      <div style={{ display:'flex', justifyContent:'center' }}>
+                        <span style={{ fontFamily:"var(--font-display)", fontSize:8, fontWeight:900, color:posColor(p.position), letterSpacing:0.5 }}>{p.position}</span>
+                      </div>
+                      {/* Name */}
+                      <div style={{ minWidth:0 }}>
+                        <div style={{ fontFamily:"var(--font-display)", fontSize:11, fontWeight:700, fontStyle:'italic', color: isSel?'#f0f2f5':'#c8d0da', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{p.name}</div>
+                      </div>
+                      {/* Age */}
+                      <div style={{ textAlign:'center', fontFamily:"var(--font-display)", fontSize:11, fontWeight:700, color:'#9aa3b2' }}>{p.age}</div>
+                      {/* OVR */}
+                      <div style={{ textAlign:'center', fontFamily:"var(--font-display)", fontSize:12, fontWeight:900, color:ovrColor(p.overall) }}>{p.overall}</div>
+                      {/* POT */}
+                      <div style={{ textAlign:'center', fontFamily:"var(--font-display)", fontSize:12, fontWeight:900, color:potColor }}>{p.potential}</div>
+                      {/* Plan */}
+                      <div style={{ fontFamily:"var(--font-mono)", fontSize:7, color:'#556070', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{plan}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Right — player detail */}
+            <div style={{ flex:1, display:'flex', flexDirection:'column', overflow:'hidden' }}>
+              {!syncedYouth ? (
+                <div style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', flexDirection:'column', gap:10 }}>
+                  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#1e2a38" strokeWidth="1.2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+                  <span style={{ fontFamily:"var(--font-mono)", fontSize:8, color:'#1e2a38', letterSpacing:3, textTransform:'uppercase' }}>Select a player</span>
+                </div>
+              ) : <AcademyDetail p={syncedYouth} accent={accent} fmt={fmt} handlePromote={handlePromote} />}
+            </div>
+          </div>
         </BentoBox>}
 
         {/* ═══════════════════════════════
             BOX 5 — HISTORY
         ═══════════════════════════════ */}
-        {section === 'history' && (() => {
-          const totalIn  = history.filter(h=>h.type==='out').reduce((s,h)=>s+(h.fee||0),0);
-          const totalOut = history.filter(h=>h.type==='in').reduce((s,h)=>s+(h.fee||0),0);
-          const netSpend = totalOut - totalIn;
-          return (
-            <BentoBox style={{ gridColumn:'1', gridRow:'1' }}>
-              <BoxHeader label="Transfer History" accent={accent} />
-              <div style={{ flex:1, overflowY:'auto', padding:16, display:'flex', flexDirection:'column', gap:16 }}>
-
-                {/* Net spend summary */}
-                <div style={{ background:'rgba(255,255,255,0.02)', border:'1px solid rgba(255,255,255,0.06)', padding:'12px 14px' }}>
-                  <div style={{ fontFamily:"var(--font-mono)", fontSize:7, color:'#556070', letterSpacing:2, textTransform:'uppercase', marginBottom:8 }}>Net Spend (Season)</div>
-                  <div style={{ display:'flex', alignItems:'center', gap:14 }}>
-                    <span style={{ fontFamily:"var(--font-display)", fontSize:24, fontWeight:900, fontStyle:'italic', color: netSpend>0?'#ff3b5c':'#00e87a' }}>
-                      {netSpend>0?'-':'+'}{fmt(Math.abs(netSpend))}
-                    </span>
-                    <div style={{ display:'flex', flexDirection:'column', gap:3 }}>
-                      <span style={{ fontFamily:"var(--font-mono)", fontSize:7, color:'#ff3b5c' }}>Spent: {fmt(totalOut)}</span>
-                      <span style={{ fontFamily:"var(--font-mono)", fontSize:7, color:'#00e87a' }}>Recouped: {fmt(totalIn)}</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Transaction log */}
-                <div style={{ flex:1, overflow:'hidden' }}>
-                  <div style={{ fontFamily:"var(--font-mono)", fontSize:7, color:'#556070', letterSpacing:2, textTransform:'uppercase', marginBottom:8 }}>Transaction Log</div>
-                  <div style={{ flex:1, overflowY:'auto', border:'1px solid rgba(255,255,255,0.06)' }}>
-                    {history.length === 0 ? (
-                      <div style={{ padding:16, textAlign:'center', fontFamily:"var(--font-mono)", fontSize:7, color:'#556070', letterSpacing:2 }}>NO TRANSACTIONS YET</div>
-                    ) : history.map((h,i)=>(
-                      <div key={i} style={{ display:'grid', gridTemplateColumns:'50px 1fr 80px 60px', padding:'8px 12px', alignItems:'center', borderBottom:'1px solid rgba(255,255,255,0.03)' }}>
-                        <span style={{ fontFamily:"var(--font-display)", fontSize:9, fontWeight:900, fontStyle:'italic', color: h.type==='in'?'#00e87a':'#ff3b5c', letterSpacing:1 }}>{h.type==='in'?'IN':'OUT'}</span>
-                        <span style={{ fontFamily:"var(--font-display)", fontSize:11, fontWeight:700, color:'#f0f2f5', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{h.player}</span>
-                        <span style={{ fontFamily:"var(--font-mono)", fontSize:7, color:'#556070' }}>Week {h.week}</span>
-                        <span style={{ fontFamily:"var(--font-display)", fontSize:11, fontWeight:900, fontStyle:'italic', color: h.type==='in'?'#ff3b5c':'#00e87a', textAlign:'right' }}>{h.type==='in'?'-':'+'}{fmt(h.fee)}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </BentoBox>
-          );
-        })()}
+        {section === 'history' && <HistorySection history={history} fmt={fmt} accent={accent} />}
 
       </div>
     </div>
