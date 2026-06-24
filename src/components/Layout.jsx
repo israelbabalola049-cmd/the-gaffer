@@ -112,6 +112,14 @@ export default function Layout({ children }) {
     }
   };
 
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen?.().catch(() => {});
+    } else {
+      document.exitFullscreen?.();
+    }
+  };
+
   // Track the ACTUAL visible viewport height (accounts for mobile browser
   // chrome — address bar, toolbars — that vh/dvh alone don't reliably reflect,
   // especially mid-rotation on iOS Safari).
@@ -476,6 +484,11 @@ export default function Layout({ children }) {
                 <div className="g-topbar-sep" />
               </>
             )}
+            <button className="g-topbar-btn" title="Fullscreen" onClick={toggleFullscreen}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M21 8V5a2 2 0 0 0-2-2h-3"/><path d="M3 16v3a2 2 0 0 0 2 2h3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/>
+              </svg>
+            </button>
             <button className="g-topbar-btn" title="New Game" onClick={handleReset}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.51"/>
